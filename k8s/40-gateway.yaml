@@ -1,0 +1,79 @@
+---
+# API Gateway. Pinned to EC2-1 (frontend) per architecture diagram, exposed
+# via NodePort 30000 so the assignment can hit it from a laptop. In a real
+# cluster swap NodePort for an Ingress / LoadBalancer.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: msp
+  labels:
+    app: api-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: role
+                    operator: In
+                    values: [frontend]
+      containers:
+        - name: gateway
+          image: DOCKERHUB_USER/ms-gateway:1.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4000
+          env:
+            - name: PORT
+              value: "4000"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_SECRET
+            - name: LOGIN_SERVICE_URL
+              value: "http://login.msp.svc.cluster.local:5002"
+            - name: STUDENT_SERVICE_URL
+              value: "http://student.msp.svc.cluster.local:5000"
+            - name: TEACHER_SERVICE_URL
+              value: "http://teacher.msp.svc.cluster.local:5001"
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=75 -Djava.security.egd=file:/dev/./urandom"
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 4000 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 4000 }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 1000m, memory: 768Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: msp
+spec:
+  type: NodePort
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      port: 4000
+      targetPort: 4000
+      nodePort: 30000

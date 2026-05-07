@@ -19,7 +19,7 @@ public class Assignment {
 
     private String title;
     private String content;
-    private String status;
+    private AssignmentStatus status;
 
     @CreatedDate
     private Instant createdAt;
@@ -53,8 +53,8 @@ public class Assignment {
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public AssignmentStatus getStatus() { return status; }
+    public void setStatus(AssignmentStatus status) { this.status = status; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
@@ -67,7 +67,7 @@ public class Assignment {
         private String studentEmail;
         private String title;
         private String content;
-        private String status;
+        private AssignmentStatus status;
         private Instant createdAt;
         private Instant updatedAt;
 
@@ -75,7 +75,7 @@ public class Assignment {
         public Builder studentEmail(String studentEmail) { this.studentEmail = studentEmail; return this; }
         public Builder title(String title) { this.title = title; return this; }
         public Builder content(String content) { this.content = content; return this; }
-        public Builder status(String status) { this.status = status; return this; }
+        public Builder status(AssignmentStatus status) { this.status = status; return this; }
         public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
         public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
 

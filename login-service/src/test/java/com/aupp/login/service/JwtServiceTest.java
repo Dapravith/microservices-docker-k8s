@@ -2,6 +2,7 @@ package com.aupp.login.service;
 
 import com.aupp.login.config.JwtProperties;
 import com.aupp.login.domain.Role;
+import com.aupp.login.service.impl.JwtServiceImpl;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -18,7 +19,7 @@ class JwtServiceTest {
 
     @Test
     void issuedTokenContainsExpectedClaims() {
-        JwtService service = new JwtService(new JwtProperties(SECRET, "test-issuer", 3600));
+        JwtService service = new JwtServiceImpl(new JwtProperties(SECRET, "test-issuer", 3600));
 
         String token = service.issue("alice@itc.edu.kh", Role.STUDENT);
 
@@ -33,7 +34,7 @@ class JwtServiceTest {
 
     @Test
     void roleClaimIsLowercase() {
-        JwtService service = new JwtService(new JwtProperties(SECRET, "test-issuer", 3600));
+        JwtService service = new JwtServiceImpl(new JwtProperties(SECRET, "test-issuer", 3600));
         String token = service.issue("bob@itc.edu.kh", Role.TEACHER);
 
         SecretKey key = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));

@@ -16,7 +16,7 @@ class AssignmentTest {
                 .studentEmail("a@b.c")
                 .title("HW")
                 .content("body")
-                .status("SUBMITTED")
+                .status(AssignmentStatus.SUBMITTED)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
@@ -25,7 +25,7 @@ class AssignmentTest {
         assertThat(a.getStudentEmail()).isEqualTo("a@b.c");
         assertThat(a.getTitle()).isEqualTo("HW");
         assertThat(a.getContent()).isEqualTo("body");
-        assertThat(a.getStatus()).isEqualTo("SUBMITTED");
+        assertThat(a.getStatus()).isEqualTo(AssignmentStatus.SUBMITTED);
         assertThat(a.getCreatedAt()).isEqualTo(now);
         assertThat(a.getUpdatedAt()).isEqualTo(now);
     }
@@ -37,7 +37,7 @@ class AssignmentTest {
         a.setStudentEmail("e");
         a.setTitle("t");
         a.setContent("c");
-        a.setStatus("DRAFT");
+        a.setStatus(AssignmentStatus.DRAFT);
         a.setCreatedAt(Instant.EPOCH);
         a.setUpdatedAt(Instant.EPOCH);
 
@@ -45,7 +45,7 @@ class AssignmentTest {
         assertThat(a.getStudentEmail()).isEqualTo("e");
         assertThat(a.getTitle()).isEqualTo("t");
         assertThat(a.getContent()).isEqualTo("c");
-        assertThat(a.getStatus()).isEqualTo("DRAFT");
+        assertThat(a.getStatus()).isEqualTo(AssignmentStatus.DRAFT);
         assertThat(a.getCreatedAt()).isEqualTo(Instant.EPOCH);
         assertThat(a.getUpdatedAt()).isEqualTo(Instant.EPOCH);
     }

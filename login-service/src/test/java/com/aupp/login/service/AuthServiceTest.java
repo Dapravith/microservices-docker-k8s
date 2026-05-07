@@ -7,6 +7,7 @@ import com.aupp.login.dto.LoginRequest;
 import com.aupp.login.dto.TokenResponse;
 import com.aupp.login.exception.InvalidCredentialsException;
 import com.aupp.login.repository.UserRepository;
+import com.aupp.login.service.impl.AuthServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +38,7 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         jwtProps = new JwtProperties("test-secret-please-change-me-1234567890-abcdef", "issuer", 3600);
-        service = new AuthService(users, encoder, jwt, jwtProps);
+        service = new AuthServiceImpl(users, encoder, jwt, jwtProps);
     }
 
     @Test

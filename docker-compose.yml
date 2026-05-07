@@ -2,8 +2,8 @@ services:
   mongo:
     image: mongo:7
     container_name: ms-mongo
-    ports:
-      - "27017:27017"
+    # No host port binding: a local mongod already owns 27017.
+    # Services reach this Mongo via the compose network at mongo:27017.
     volumes:
       - mongo-data:/data/db
     healthcheck:
@@ -48,7 +48,9 @@ services:
       PORT: 5000
       MONGO_URI: mongodb://mongo:27017/student_db
     ports:
-      - "5000:5000"
+      # Host 5000 is owned by macOS AirPlay Receiver, so map to 5010 instead.
+      # Container still listens on 5000; the gateway reaches it at student:5000.
+      - "5010:5000"
     depends_on:
       mongo:
         condition: service_healthy

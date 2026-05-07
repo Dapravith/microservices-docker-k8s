@@ -6,6 +6,7 @@ import com.aupp.registration.dto.RegisterRequest;
 import com.aupp.registration.dto.UserResponse;
 import com.aupp.registration.exception.UserAlreadyExistsException;
 import com.aupp.registration.repository.UserRepository;
+import com.aupp.registration.service.impl.RegistrationServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -28,7 +29,7 @@ class RegistrationServiceTest {
 
     @Mock UserRepository users;
     @Mock PasswordEncoder encoder;
-    @InjectMocks RegistrationService service;
+    @InjectMocks RegistrationServiceImpl service;
 
     @Test
     void registerHashesPasswordAndPersistsUser() {

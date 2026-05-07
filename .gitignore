@@ -25,6 +25,8 @@ Thumbs.db
 .env.local
 *.local.yaml
 
-.vscode/launch.json
+# Editor/agent metadata
 .claude/
-.github/java-upgrade
+.github/
+.vscode/
+.idea/

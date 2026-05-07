@@ -19,7 +19,7 @@ public record AssignmentResponse(
                 a.getStudentEmail(),
                 a.getTitle(),
                 a.getContent(),
-                a.getStatus(),
+                a.getStatus() == null ? null : a.getStatus().name(),
                 a.getCreatedAt(),
                 a.getUpdatedAt()
         );

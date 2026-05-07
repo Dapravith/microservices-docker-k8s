@@ -7,6 +7,7 @@ import com.aupp.teacher.dto.CreateAssignmentRequest;
 import com.aupp.teacher.exception.AssignmentNotFoundException;
 import com.aupp.teacher.exception.MissingCallerIdentityException;
 import com.aupp.teacher.repository.TeacherAssignmentRepository;
+import com.aupp.teacher.service.impl.TeacherAssignmentServiceImpl;
 import com.aupp.teacher.web.CallerIdentity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +34,7 @@ import static org.mockito.Mockito.when;
 class TeacherAssignmentServiceTest {
 
     @Mock TeacherAssignmentRepository repo;
-    @InjectMocks TeacherAssignmentService service;
+    @InjectMocks TeacherAssignmentServiceImpl service;
 
     private static final CallerIdentity SMITH = new CallerIdentity("ms.smith@x.y", "teacher");
 

@@ -1,6 +1,7 @@
 package com.aupp.student.service;
 
 import com.aupp.student.domain.Assignment;
+import com.aupp.student.domain.AssignmentStatus;
 import com.aupp.student.dto.AssignmentListResponse;
 import com.aupp.student.dto.AssignmentResponse;
 import com.aupp.student.dto.SubmitAssignmentRequest;
@@ -8,6 +9,7 @@ import com.aupp.student.dto.UpdateAssignmentRequest;
 import com.aupp.student.exception.AssignmentNotFoundException;
 import com.aupp.student.exception.MissingCallerIdentityException;
 import com.aupp.student.repository.AssignmentRepository;
+import com.aupp.student.service.impl.AssignmentServiceImpl;
 import com.aupp.student.web.CallerIdentity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,7 +34,7 @@ import static org.mockito.Mockito.when;
 class AssignmentServiceTest {
 
     @Mock AssignmentRepository repo;
-    @InjectMocks AssignmentService service;
+    @InjectMocks AssignmentServiceImpl service;
 
     private static final CallerIdentity ALICE = new CallerIdentity("alice@x.y", "student");
 
@@ -50,7 +52,7 @@ class AssignmentServiceTest {
         verify(repo).save(captor.capture());
         Assignment saved = captor.getValue();
         assertThat(saved.getStudentEmail()).isEqualTo("alice@x.y");
-        assertThat(saved.getStatus()).isEqualTo("SUBMITTED");
+        assertThat(saved.getStatus()).isEqualTo(AssignmentStatus.SUBMITTED);
         assertThat(saved.getTitle()).isEqualTo("HW1");
         assertThat(resp.id()).isEqualTo("id-1");
     }
@@ -98,7 +100,7 @@ class AssignmentServiceTest {
     @Test
     void updateLatestAppliesPartialPatch() {
         Assignment latest = Assignment.builder().id("1").studentEmail("alice@x.y")
-                .title("HW1").content("v1").status("SUBMITTED").build();
+                .title("HW1").content("v1").status(AssignmentStatus.SUBMITTED).build();
         when(repo.findFirstByStudentEmailOrderByCreatedAtDesc("alice@x.y")).thenReturn(Optional.of(latest));
         when(repo.save(any(Assignment.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -130,7 +132,7 @@ class AssignmentServiceTest {
     @Test
     void resubmitLatestSetsStatusAndSaves() {
         Assignment latest = Assignment.builder().id("1").studentEmail("alice@x.y")
-                .title("HW1").content("v1").status("SUBMITTED").build();
+                .title("HW1").content("v1").status(AssignmentStatus.SUBMITTED).build();
         when(repo.findFirstByStudentEmailOrderByCreatedAtDesc(anyString())).thenReturn(Optional.of(latest));
         when(repo.save(any(Assignment.class))).thenAnswer(inv -> inv.getArgument(0));
 

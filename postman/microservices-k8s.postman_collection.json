@@ -1,19 +1,65 @@
 {
   "info": {
-    "name": "microservices-k8s (Spring Boot)",
-    "description": "End-to-end demo of the AWS / EC2 / Kubernetes / Spring Boot deployment. Covers the assignment screenshots: login, /student with student JWT, /teacher with teacher JWT, plus the two negative cases.",
+    "name": "microservices-k8s (Spring Boot, 5 services)",
+    "description": "End-to-end flow against the API Gateway: register → login → role-scoped API calls. Covers every assignment screenshot.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "1. Login as student → save studentToken",
+      "name": "1. Register a student",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{gatewayUrl}}/register/student",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"alice@itc.edu.kh\",\n  \"password\": \"secret123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 or 409', () => pm.expect([201,409]).to.include(pm.response.code));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Register a teacher",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{gatewayUrl}}/register/teacher",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"ms.smith@itc.edu.kh\",\n  \"password\": \"secret123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 or 409', () => pm.expect([201,409]).to.include(pm.response.code));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Login as student → save studentToken",
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "url": "{{gatewayUrl}}/login",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"student1@itc.edu.kh\",\n  \"password\": \"student123\",\n  \"role\": \"student\"\n}"
+          "raw": "{\n  \"email\": \"alice@itc.edu.kh\",\n  \"password\": \"secret123\",\n  \"role\": \"student\"\n}"
         }
       },
       "event": [
@@ -32,14 +78,14 @@
       ]
     },
     {
-      "name": "2. Login as teacher → save teacherToken",
+      "name": "4. Login as teacher → save teacherToken",
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "url": "{{gatewayUrl}}/login",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"teacher1@itc.edu.kh\",\n  \"password\": \"teacher123\",\n  \"role\": \"teacher\"\n}"
+          "raw": "{\n  \"email\": \"ms.smith@itc.edu.kh\",\n  \"password\": \"secret123\",\n  \"role\": \"teacher\"\n}"
         }
       },
       "event": [
@@ -57,7 +103,7 @@
       ]
     },
     {
-      "name": "3. /student with student JWT → 201 (DB write)",
+      "name": "5. /student with student JWT → 201 (DB write)",
       "request": {
         "method": "POST",
         "header": [
@@ -77,14 +123,14 @@
             "type": "text/javascript",
             "exec": [
               "pm.test('201 Created', () => pm.response.to.have.status(201));",
-              "pm.test('persisted by caller email', () => pm.expect(pm.response.json().studentEmail).to.eql('student1@itc.edu.kh'));"
+              "pm.test('persisted by caller email', () => pm.expect(pm.response.json().studentEmail).to.eql('alice@itc.edu.kh'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "4. /student with student JWT → 200 (DB read)",
+      "name": "6. /student with student JWT → 200 (DB read)",
       "request": {
         "method": "GET",
         "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }],
@@ -104,7 +150,7 @@
       ]
     },
     {
-      "name": "5. /teacher with teacher JWT → 201 (DB write)",
+      "name": "7. /teacher with teacher JWT → 201 (DB write)",
       "request": {
         "method": "POST",
         "header": [
@@ -124,14 +170,14 @@
             "type": "text/javascript",
             "exec": [
               "pm.test('201 Created', () => pm.response.to.have.status(201));",
-              "pm.test('persisted by caller email', () => pm.expect(pm.response.json().teacherEmail).to.eql('teacher1@itc.edu.kh'));"
+              "pm.test('persisted by caller email', () => pm.expect(pm.response.json().teacherEmail).to.eql('ms.smith@itc.edu.kh'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "6. /student with TEACHER JWT → 403 (will not work)",
+      "name": "8. /student with TEACHER JWT → 403 (will not work)",
       "request": {
         "method": "GET",
         "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
@@ -151,7 +197,7 @@
       ]
     },
     {
-      "name": "7. /teacher with STUDENT JWT → 403 (will not work)",
+      "name": "9. /teacher with STUDENT JWT → 403 (will not work)",
       "request": {
         "method": "GET",
         "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }],

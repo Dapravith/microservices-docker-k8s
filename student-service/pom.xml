@@ -23,6 +23,9 @@
         <lombok.version>1.18.38</lombok.version>
         <jacoco.version>0.8.12</jacoco.version>
         <jacoco.line.coverage>0.80</jacoco.line.coverage>
+        <sonar.maven.version>4.0.0.4121</sonar.maven.version>
+        <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.junit.reportPaths>target/surefire-reports</sonar.junit.reportPaths>
     </properties>
 
     <dependencies>
@@ -62,6 +65,11 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>${sonar.maven.version}</version>
             </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>

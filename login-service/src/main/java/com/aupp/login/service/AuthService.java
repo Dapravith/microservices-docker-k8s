@@ -4,11 +4,8 @@ import com.aupp.login.config.JwtProperties;
 import com.aupp.login.domain.Role;
 import com.aupp.login.domain.User;
 import com.aupp.login.dto.LoginRequest;
-import com.aupp.login.dto.RegisterRequest;
 import com.aupp.login.dto.TokenResponse;
-import com.aupp.login.dto.UserResponse;
 import com.aupp.login.exception.InvalidCredentialsException;
-import com.aupp.login.exception.UserAlreadyExistsException;
 import com.aupp.login.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,20 +44,5 @@ public class AuthService {
         String token = jwt.issue(user.getEmail(), user.getRole());
         log.info("issued token for {} ({})", user.getEmail(), user.getRole().lower());
         return TokenResponse.bearer(token, jwtProps.expirationSeconds(), user.getRole().lower());
-    }
-
-    public UserResponse register(RegisterRequest req) {
-        Role role = Role.from(req.role());
-        String email = req.email().toLowerCase();
-        if (users.existsByEmail(email)) {
-            throw new UserAlreadyExistsException("User with email " + email + " already exists");
-        }
-        User saved = users.save(User.builder()
-                .email(email)
-                .passwordHash(encoder.encode(req.password()))
-                .role(role)
-                .build());
-        log.info("registered user {} ({})", saved.getEmail(), saved.getRole().lower());
-        return UserResponse.of(saved);
     }
 }

@@ -43,6 +43,8 @@ spec:
                   key: JWT_SECRET
             - name: LOGIN_SERVICE_URL
               value: "http://login.msp.svc.cluster.local:5002"
+            - name: REGISTRATION_SERVICE_URL
+              value: "http://registration.msp.svc.cluster.local:5003"
             - name: STUDENT_SERVICE_URL
               value: "http://student.msp.svc.cluster.local:5000"
             - name: TEACHER_SERVICE_URL

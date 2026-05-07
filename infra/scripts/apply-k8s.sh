@@ -11,14 +11,16 @@ kubectl apply -f k8s/05-mongodb.yaml
 kubectl -n msp rollout status statefulset/mongo --timeout=180s
 
 kubectl apply -f k8s/10-login.yaml
+kubectl apply -f k8s/15-registration.yaml
 kubectl apply -f k8s/20-student.yaml
 kubectl apply -f k8s/30-teacher.yaml
 kubectl apply -f k8s/40-gateway.yaml
 
-kubectl -n msp rollout status deploy/login-service   --timeout=180s
-kubectl -n msp rollout status deploy/student-service --timeout=180s
-kubectl -n msp rollout status deploy/teacher-service --timeout=180s
-kubectl -n msp rollout status deploy/api-gateway     --timeout=180s
+kubectl -n msp rollout status deploy/login-service        --timeout=180s
+kubectl -n msp rollout status deploy/registration-service --timeout=180s
+kubectl -n msp rollout status deploy/student-service      --timeout=180s
+kubectl -n msp rollout status deploy/teacher-service      --timeout=180s
+kubectl -n msp rollout status deploy/api-gateway          --timeout=180s
 
 echo
 echo "Cluster state:"

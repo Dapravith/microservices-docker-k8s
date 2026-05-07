@@ -115,14 +115,16 @@ kubectl -n msp get pods -o wide --field-selector spec.nodeName=$EC2_3
 Set the `gatewayUrl` collection variable to `http://<EC2-1 public IP>:30000`
 and run the requests in order:
 
-| # | Request                                     | Expected | Screenshot                  |
-| - | ------------------------------------------- | -------- | --------------------------- |
-| 1 | `POST /login` (student)                     | 200 + token | 5. Login → JWT token       |
-| 2 | `POST /login` (teacher)                     | 200 + token | (same shape)               |
-| 3 | `POST /student/submitassignment` w/ student | 201 + Mongo doc | 6. /student with student JWT |
-| 4 | `POST /teacher/addassignment` w/ teacher    | 201 + Mongo doc | 7. /teacher with teacher JWT |
-| 5 | `GET /student/viewassignment` w/ teacher    | **403**  | 8. /student with teacher JWT |
-| 6 | `GET /teacher/searchstudent` w/ student     | **403**  | 9. /teacher with student JWT |
+| # | Request                                       | Expected         | Screenshot                  |
+| - | --------------------------------------------- | ---------------- | --------------------------- |
+| 1 | `POST /register/student` (alice)              | 201 + UserResp   | New                         |
+| 2 | `POST /register/teacher` (ms.smith)           | 201 + UserResp   | New                         |
+| 3 | `POST /login` (student)                       | 200 + token      | 5. Login → JWT token        |
+| 4 | `POST /login` (teacher)                       | 200 + token      | (same shape)                |
+| 5 | `POST /student/submitassignment` w/ student   | 201 + Mongo doc  | 6. /student with student JWT |
+| 6 | `POST /teacher/addassignment` w/ teacher      | 201 + Mongo doc  | 7. /teacher with teacher JWT |
+| 7 | `GET /student/viewassignment` w/ teacher      | **403**          | 8. /student with teacher JWT |
+| 8 | `GET /teacher/searchstudent` w/ student       | **403**          | 9. /teacher with student JWT |
 
 Database activity — confirm with mongosh:
 
@@ -134,7 +136,28 @@ kubectl -n msp exec -it statefulset/mongo -- mongosh --quiet --eval '
 '
 ```
 
-## 7. Tear down
+## 7. Code quality with SonarQube (optional but recommended)
+
+Run a SonarQube scan against any branch before pushing:
+
+```bash
+docker-compose -f docker-compose.sonar.yml up -d        # http://localhost:9000
+# admin/admin on first login, then: Account → Security → Generate Token
+export SONAR_TOKEN=<token>
+./infra/scripts/sonar-scan.sh
+```
+
+You get five Sonar projects (`microservices-k8s-registration`,
+`-login`, `-student`, `-teacher`, `-gateway`), each with coverage,
+duplications, security hotspots, and code smells.
+
+Tear the local Sonar stack back down with:
+
+```bash
+docker-compose -f docker-compose.sonar.yml down
+```
+
+## 8. Tear down
 
 ```bash
 kubectl delete ns msp

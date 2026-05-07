@@ -1,57 +1,62 @@
 # Microservices Deployment — Docker · Kubernetes · Multi-EC2 (Spring Boot)
 
-A four-service Spring Boot stack deployed across three AWS EC2 nodes via
+A five-service Spring Boot stack deployed across three AWS EC2 nodes via
 Kubernetes. Built for the AUPP "Design and Deployment of a Scalable
 Microservices-Based Task Management System" assignment.
 
 ## Architecture
 
 ```
-                  ┌──────────── EC2-1 (role=frontend, db=mongo) ────────────┐
-                  │                                                         │
-   Postman ───►   │   api-gateway (Spring Cloud Gateway, :4000)             │
-                  │      │                                                  │
-                  │      ├─► login-service (Spring Boot, :5002) ──┐         │
-                  │      │                                        │         │
-                  │      ▼                                        ▼         │
-                  │                                          MongoDB        │
-                  └──────────────────────────────────────────────│──────────┘
-                         │ /student                              │
-                         ▼                                       │
-                  ┌──────────── EC2-2 (role=student) ────────────┤
-                  │   student-service (:5000) + Vol1 (emptyDir)  │
-                  └──────────────────────────────────────────────┤
-                         │ /teacher                              │
-                         ▼                                       │
-                  ┌──────────── EC2-3 (role=teacher) ────────────┘
-                  │   teacher-service (:5001) + Vol2 (emptyDir)
-                  └──────────────────────────────────────────────
+                  ┌──────────── EC2-1 (role=frontend, db=mongo) ─────────────┐
+                  │                                                          │
+   Postman ───►   │   api-gateway (Spring Cloud Gateway, :4000)              │
+                  │      │                                                   │
+                  │      ├─► registration-service (Spring Boot, :5003) ─┐   │
+                  │      ├─► login-service        (Spring Boot, :5002) ─┤   │
+                  │      │                                              ▼   │
+                  │      │                                          MongoDB  │
+                  └──────│──────────────────────────────────────────────│───┘
+                         │ /student                                     │
+                         ▼                                              │
+                  ┌──────────── EC2-2 (role=student) ────────────┐      │
+                  │   student-service (:5000) + Vol1 (emptyDir)  │──────┤
+                  └──────────────────────────────────────────────┘      │
+                         │ /teacher                                     │
+                         ▼                                              │
+                  ┌──────────── EC2-3 (role=teacher) ────────────┐      │
+                  │   teacher-service (:5001) + Vol2 (emptyDir)  │──────┘
+                  └──────────────────────────────────────────────┘
 ```
 
 The gateway authenticates every protected request and forwards
 `X-User-Email` / `X-User-Role` headers downstream — student/teacher
 services trust those headers and never re-validate the JWT, so they stay
-small and focused.
+small and focused. Splitting registration into its own service keeps the
+login service single-purpose: it never writes to the users collection.
 
-| Service          | Stack                      | Port | DB           | Pinned to |
-| ---------------- | -------------------------- | ---- | ------------ | --------- |
-| `api-gateway`    | Spring Cloud Gateway       | 4000 | —            | EC2-1     |
-| `login-service`  | Spring Boot + Spring Sec   | 5002 | `auth_db`    | EC2-1     |
-| `student-service`| Spring Boot                | 5000 | `student_db` | EC2-2     |
-| `teacher-service`| Spring Boot                | 5001 | `teacher_db` | EC2-3     |
+| Service               | Stack                      | Port | DB           | Pinned to | Responsibility |
+| --------------------- | -------------------------- | ---- | ------------ | --------- | -------------- |
+| `api-gateway`         | Spring Cloud Gateway       | 4000 | —            | EC2-1     | Edge routing + JWT validation + role enforcement |
+| `registration-service`| Spring Boot + Spring Sec   | 5003 | `auth_db`    | EC2-1     | **Sole writer** of users collection            |
+| `login-service`       | Spring Boot + Spring Sec   | 5002 | `auth_db`    | EC2-1     | Read-only auth: validate creds → issue JWT     |
+| `student-service`     | Spring Boot                | 5000 | `student_db` | EC2-2     | Student assignment domain                       |
+| `teacher-service`     | Spring Boot                | 5001 | `teacher_db` | EC2-3     | Teacher assignment domain                       |
 
 ## Repository layout
 
 ```
 .
-├── api-gateway/          Spring Cloud Gateway (JWT validation + role filter)
-├── login-service/        Issues JWT after credential check (BCrypt + Mongo)
-├── student-service/      /submitassignment, /viewassignment, /studentupdateprofile, /studentresubmitassignment
-├── teacher-service/      /addassignment, /searchstudent, /removeassignment/{id}
-├── docker-compose.yml    Local stack (Mongo + 4 services)
-├── k8s/                  Manifests (00..40) — apply in numeric order
-├── infra/scripts/        bootstrap-ec2.sh, init-control-plane.sh, label-nodes.sh, build-and-push.sh, apply-k8s.sh
-└── postman/              microservices-k8s.postman_collection.json
+├── api-gateway/             Spring Cloud Gateway (JWT validation + role filter)
+├── registration-service/    Creates users (sole writer of auth_db.users)
+├── login-service/           Authenticates users, issues JWT (sole reader for login)
+├── student-service/         Student assignment APIs
+├── teacher-service/         Teacher assignment APIs
+├── docker-compose.yml       Local stack (Mongo + 5 services)
+├── docker-compose.sonar.yml Local SonarQube + Postgres
+├── k8s/                     Manifests (00..40) — apply in numeric order
+├── infra/scripts/           bootstrap-ec2, init-control-plane, label-nodes,
+│                            build-and-push, apply-k8s, test-all, sonar-scan
+└── postman/                 Postman collection (covers every assignment screenshot)
 ```
 
 ## Quickstart — local (docker-compose)
@@ -61,28 +66,27 @@ docker-compose up --build -d
 docker-compose logs -f gateway
 ```
 
-The login service seeds two demo users on first boot:
-
-| Email                    | Password    | Role     |
-| ------------------------ | ----------- | -------- |
-| `student1@itc.edu.kh`    | `student123`| student  |
-| `teacher1@itc.edu.kh`    | `teacher123`| teacher  |
+Register a student, log in, and exercise the API:
 
 ```bash
-# Login as student
-curl -s -X POST http://localhost:4000/login \
+# 1. Register
+curl -s -X POST http://localhost:4000/register/student \
   -H "Content-Type: application/json" \
-  -d '{"email":"student1@itc.edu.kh","password":"student123","role":"student"}' \
-  | tee /tmp/student.json
-STUDENT=$(jq -r .token /tmp/student.json)
+  -d '{"email":"alice@itc.edu.kh","password":"secret123"}'
 
-# Submit an assignment (DB write)
+# 2. Login → grab token
+STUDENT=$(curl -s -X POST http://localhost:4000/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@itc.edu.kh","password":"secret123","role":"student"}' \
+  | jq -r .token)
+
+# 3. Submit an assignment (DB write)
 curl -s -X POST http://localhost:4000/student/submitassignment \
   -H "Authorization: Bearer $STUDENT" \
   -H "Content-Type: application/json" \
   -d '{"title":"HW1","content":"linear equations"}'
 
-# /teacher with student JWT → 403
+# 4. Negative case — /teacher with student JWT → 403
 curl -i -X GET http://localhost:4000/teacher/searchstudent \
   -H "Authorization: Bearer $STUDENT"
 ```
@@ -112,17 +116,19 @@ The gateway is exposed as a NodePort on `30000`, so requests land at
 
 ## API surface
 
-| Method | Path                              | Caller    | What it does                           |
-| ------ | --------------------------------- | --------- | -------------------------------------- |
-| POST   | `/login`                          | anyone    | issues a JWT for valid credentials     |
-| POST   | `/register`                       | anyone    | (lab) creates a new student/teacher    |
-| POST   | `/student/submitassignment`       | student   | persists an assignment to Mongo        |
-| GET    | `/student/viewassignment`         | student   | returns this student's assignments     |
-| PUT    | `/student/studentupdateprofile`   | student   | updates the latest assignment          |
-| PUT    | `/student/studentresubmitassignment` | student | re-submits the latest assignment      |
-| POST   | `/teacher/addassignment`          | teacher   | persists a teacher-owned assignment    |
-| GET    | `/teacher/searchstudent?title=…`  | teacher   | search the teacher's own assignments   |
-| DELETE | `/teacher/removeassignment/{id}`  | teacher   | delete one of the teacher's records    |
+| Method | Path                               | Caller    | Service              | Result |
+| ------ | ---------------------------------- | --------- | -------------------- | ------ |
+| POST   | `/register`                        | anyone    | registration-service | 201 + UserResponse · 409 if dup · 400 if invalid |
+| POST   | `/register/student`                | anyone    | registration-service | 201 + UserResponse (role auto-set)               |
+| POST   | `/register/teacher`                | anyone    | registration-service | 201 + UserResponse (role auto-set)               |
+| POST   | `/login`                           | anyone    | login-service        | 200 + Bearer JWT · 401 on bad creds              |
+| POST   | `/student/submitassignment`        | student   | student-service      | 201 — persists assignment                        |
+| GET    | `/student/viewassignment`          | student   | student-service      | 200 — returns this student's assignments         |
+| PUT    | `/student/studentupdateprofile`    | student   | student-service      | 200 — patch latest assignment                    |
+| PUT    | `/student/studentresubmitassignment`| student  | student-service      | 200 — re-submit latest assignment                |
+| POST   | `/teacher/addassignment`           | teacher   | teacher-service      | 201 — persists teacher-owned assignment          |
+| GET    | `/teacher/searchstudent?title=…`   | teacher   | teacher-service      | 200 — search this teacher's assignments          |
+| DELETE | `/teacher/removeassignment/{id}`   | teacher   | teacher-service      | 200 — owner-scoped delete                        |
 
 Every protected route returns:
 
@@ -137,30 +143,48 @@ Mongo, or `WebTestClient` for the gateway). The build fails if line
 coverage drops below **80%** — enforced by JaCoCo's `check` goal.
 
 ```bash
-( cd login-service   && mvn -B clean verify )
-( cd student-service && mvn -B clean verify )
-( cd teacher-service && mvn -B clean verify )
-( cd api-gateway     && mvn -B clean verify )
+# All five services in one go:
+./infra/scripts/test-all.sh
+
+# Or individually:
+( cd registration-service && mvn -B clean verify )
+( cd login-service        && mvn -B clean verify )
+( cd student-service      && mvn -B clean verify )
+( cd teacher-service      && mvn -B clean verify )
+( cd api-gateway          && mvn -B clean verify )
 ```
 
-Current results (run `mvn clean verify` to reproduce):
-
-| Service          | Tests | Line | Branch | Gate (≥80% line) |
-| ---------------- | ----: | ---: | -----: | ---------------- |
-| login-service    | 30    | 97%  | 88%    | ✅                |
-| student-service  | 24    | 96%  | 78%    | ✅                |
-| teacher-service  | 24    | 95%  | 90%    | ✅                |
-| api-gateway      | 10    | 96%  | 71%    | ✅                |
-| **Total**        | **88**| ~96% |        | ✅                |
-
 After `mvn verify` each service's HTML report is at
-`<service>/target/site/jacoco/index.html`. JaCoCo excludes
-`*Application.class`, the `dto/` package (records have no logic), and
-exception classes from the coverage calculation.
+`<service>/target/site/jacoco/index.html`.
 
-The student/teacher integration tests boot a real in-memory Mongo via
-Flapdoodle, so the first run needs network access to download the Mongo
-binary.
+## Code quality — SonarQube
+
+`sonar-maven-plugin` is wired into every POM, and each service has a
+`sonar-project.properties` describing its analysis scope. To run a full
+scan locally:
+
+```bash
+# 1. Bring up SonarQube (Postgres-backed)
+docker-compose -f docker-compose.sonar.yml up -d
+open http://localhost:9000     # default login admin/admin → change password
+
+# 2. Generate a User Token under Account → Security and export it
+export SONAR_TOKEN=<token>
+
+# 3. Scan everything
+./infra/scripts/sonar-scan.sh
+```
+
+The scan script runs `mvn clean verify` (so JaCoCo XML reports are fresh)
+and then `mvn sonar:sonar` per service. You'll get five projects in
+SonarQube — one per microservice — each with its own coverage,
+duplications, security hotspots, and code smells dashboard.
+
+If you have a hosted instance instead, set `SONAR_HOST` accordingly:
+
+```bash
+SONAR_HOST=https://sonarcloud.io SONAR_TOKEN=… ./infra/scripts/sonar-scan.sh
+```
 
 ## Configuration
 
@@ -168,15 +192,15 @@ Every service reads config from environment variables (or `application.yml`
 defaults). The Kubernetes Secret `app-secrets` carries the production
 values; for local docker-compose they are inlined in `docker-compose.yml`.
 
-| Variable                | Used by               | Notes                                        |
-| ----------------------- | --------------------- | -------------------------------------------- |
-| `JWT_SECRET`            | login + gateway       | must be ≥ 32 bytes, identical on both        |
-| `JWT_EXPIRATION_SECONDS`| login                 | default 86400                                |
-| `MONGO_URI`             | login/student/teacher | Mongo connection string                      |
-| `LOGIN_SERVICE_URL`     | gateway               | upstream URL for `/login`, `/register`       |
-| `STUDENT_SERVICE_URL`   | gateway               | upstream URL for `/student/**`               |
-| `TEACHER_SERVICE_URL`   | gateway               | upstream URL for `/teacher/**`               |
-| `SEED_USERS`            | login                 | set `false` in prod, `true` for the demo     |
+| Variable                   | Used by                         | Notes                                  |
+| -------------------------- | ------------------------------- | -------------------------------------- |
+| `JWT_SECRET`               | login + gateway                 | must be ≥ 32 bytes, identical on both  |
+| `JWT_EXPIRATION_SECONDS`   | login                           | default 86400                          |
+| `MONGO_URI`                | login/registration/student/teacher | per-service Mongo connection string |
+| `LOGIN_SERVICE_URL`        | gateway                         | upstream URL for `/login`              |
+| `REGISTRATION_SERVICE_URL` | gateway                         | upstream URL for `/register/**`        |
+| `STUDENT_SERVICE_URL`      | gateway                         | upstream URL for `/student/**`         |
+| `TEACHER_SERVICE_URL`      | gateway                         | upstream URL for `/teacher/**`         |
 
 ## License
 

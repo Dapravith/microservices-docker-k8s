@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: registration-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/auth_db}
+      auto-index-creation: true
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:5003}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.aupp: INFO
+    org.springframework.data.mongodb: WARN

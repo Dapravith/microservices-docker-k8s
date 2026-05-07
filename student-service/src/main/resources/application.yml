@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: student-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/student_db}
+      auto-index-creation: true
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:5000}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    com.aupp: INFO
+    org.springframework.data.mongodb: WARN

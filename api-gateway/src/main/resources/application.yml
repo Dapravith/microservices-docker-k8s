@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: login-route
+          uri: ${LOGIN_SERVICE_URL:http://localhost:5002}
+          predicates:
+            - Path=/login,/register
+          filters:
+            - StripPrefix=0
+        - id: student-route
+          uri: ${STUDENT_SERVICE_URL:http://localhost:5000}
+          predicates:
+            - Path=/student/**
+          filters:
+            - StripPrefix=1
+            - name: JwtRoleAuthFilter
+              args:
+                requiredRole: student
+        - id: teacher-route
+          uri: ${TEACHER_SERVICE_URL:http://localhost:5001}
+          predicates:
+            - Path=/teacher/**
+          filters:
+            - StripPrefix=1
+            - name: JwtRoleAuthFilter
+              args:
+                requiredRole: teacher
+
+server:
+  port: ${PORT:4000}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:347186591486_change_me_must_be_at_least_32_chars}
+
+logging:
+  level:
+    root: INFO
+    com.aupp: INFO
+    org.springframework.cloud.gateway: INFO

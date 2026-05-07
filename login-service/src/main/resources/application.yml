@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: login-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/auth_db}
+      auto-index-creation: true
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:5002}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:347186591486_change_me_must_be_at_least_32_chars}
+    issuer: aupp-login-service
+    expiration-seconds: ${JWT_EXPIRATION_SECONDS:86400}
+  seed:
+    enabled: ${SEED_USERS:true}
+
+logging:
+  level:
+    root: INFO
+    com.aupp: INFO
+    org.springframework.data.mongodb: WARN

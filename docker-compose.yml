@@ -1,0 +1,75 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: ms-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  login:
+    build: ./login-service
+    image: ms-login:1.0
+    container_name: ms-login
+    environment:
+      PORT: 5002
+      MONGO_URI: mongodb://mongo:27017/auth_db
+      JWT_SECRET: 347186591486_change_me_must_be_at_least_32_chars
+      JWT_EXPIRATION_SECONDS: 86400
+      SEED_USERS: "true"
+    ports:
+      - "5002:5002"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  student:
+    build: ./student-service
+    image: ms-student:1.0
+    container_name: ms-student
+    environment:
+      PORT: 5000
+      MONGO_URI: mongodb://mongo:27017/student_db
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  teacher:
+    build: ./teacher-service
+    image: ms-teacher:1.0
+    container_name: ms-teacher
+    environment:
+      PORT: 5001
+      MONGO_URI: mongodb://mongo:27017/teacher_db
+    ports:
+      - "5001:5001"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  gateway:
+    build: ./api-gateway
+    image: ms-gateway:1.0
+    container_name: ms-gateway
+    environment:
+      PORT: 4000
+      JWT_SECRET: 347186591486_change_me_must_be_at_least_32_chars
+      LOGIN_SERVICE_URL: http://login:5002
+      STUDENT_SERVICE_URL: http://student:5000
+      TEACHER_SERVICE_URL: http://teacher:5001
+    ports:
+      - "4000:4000"
+    depends_on:
+      - login
+      - student
+      - teacher
+
+volumes:
+  mongo-data:

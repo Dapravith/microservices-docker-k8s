@@ -129,17 +129,38 @@ Every protected route returns:
 * **401** if no/invalid/expired Bearer token
 * **403** if the token's role doesn't match the route's required role
 
-## Tests
+## Tests & coverage
+
+Every service ships with **unit tests** (Mockito + plain JUnit) and
+**integration tests** (Spring Boot context, MockMvc, Flapdoodle embedded
+Mongo, or `WebTestClient` for the gateway). The build fails if line
+coverage drops below **80%** — enforced by JaCoCo's `check` goal.
 
 ```bash
-( cd login-service   && mvn -B test )   # 5 tests
-( cd student-service && mvn -B test )   # 3 tests (uses embedded Mongo)
-( cd teacher-service && mvn -B test )   # 4 tests (uses embedded Mongo)
-( cd api-gateway     && mvn -B test )   # 4 tests
+( cd login-service   && mvn -B clean verify )
+( cd student-service && mvn -B clean verify )
+( cd teacher-service && mvn -B clean verify )
+( cd api-gateway     && mvn -B clean verify )
 ```
 
-The student/teacher tests boot a real in-memory Mongo via Flapdoodle, so
-you need a working JDK 21+ and network access on first run.
+Current results (run `mvn clean verify` to reproduce):
+
+| Service          | Tests | Line | Branch | Gate (≥80% line) |
+| ---------------- | ----: | ---: | -----: | ---------------- |
+| login-service    | 30    | 97%  | 88%    | ✅                |
+| student-service  | 24    | 96%  | 78%    | ✅                |
+| teacher-service  | 24    | 95%  | 90%    | ✅                |
+| api-gateway      | 10    | 96%  | 71%    | ✅                |
+| **Total**        | **88**| ~96% |        | ✅                |
+
+After `mvn verify` each service's HTML report is at
+`<service>/target/site/jacoco/index.html`. JaCoCo excludes
+`*Application.class`, the `dto/` package (records have no logic), and
+exception classes from the coverage calculation.
+
+The student/teacher integration tests boot a real in-memory Mongo via
+Flapdoodle, so the first run needs network access to download the Mongo
+binary.
 
 ## Configuration
 

@@ -24,3 +24,7 @@ Thumbs.db
 .env
 .env.local
 *.local.yaml
+
+.vscode/launch.json
+.claude/
+.github/java-upgrade

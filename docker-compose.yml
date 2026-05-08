@@ -34,7 +34,7 @@ services:
       - "5003:5003"
 
   login:
-    build: ./login-service
+    build: authentication-service
     image: ms-login:1.0
     container_name: ms-login
     environment:

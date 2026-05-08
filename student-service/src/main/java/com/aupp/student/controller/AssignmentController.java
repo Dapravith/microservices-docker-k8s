@@ -1,6 +1,5 @@
 package com.aupp.student.controller;
 
-import com.aupp.student.dto.AssignmentListResponse;
 import com.aupp.student.dto.AssignmentResponse;
 import com.aupp.student.dto.SubmitAssignmentRequest;
 import com.aupp.student.dto.UpdateAssignmentRequest;
@@ -15,6 +14,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 public class AssignmentController {
@@ -35,7 +36,7 @@ public class AssignmentController {
     }
 
     @GetMapping("/viewassignment")
-    public AssignmentListResponse view(
+    public List<AssignmentResponse> view(
             @RequestHeader(value = CallerIdentity.EMAIL_HEADER, required = false) String email,
             @RequestHeader(value = CallerIdentity.ROLE_HEADER, required = false) String role) {
         return service.listMine(new CallerIdentity(email, role));

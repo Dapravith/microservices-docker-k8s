@@ -4,6 +4,7 @@ import com.aupp.registration.controller.RegistrationController;
 import com.aupp.registration.dto.RegisterRequest;
 import com.aupp.registration.dto.UserResponse;
 import com.aupp.registration.service.RegistrationService;
+import com.aupp.registration.web.ApiResponseAdvice;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = RegistrationController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, ApiResponseAdvice.class})
 @TestPropertySource(properties = "spring.data.mongodb.uri=")
 class GlobalExceptionHandlerTest {
 
@@ -42,9 +43,9 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new RegisterRequest("a@b.c", "secret123", "student"))))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.code").value("409"))
                 .andExpect(jsonPath("$.message").value("dup"))
-                .andExpect(jsonPath("$.path").value("/register"));
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
@@ -55,17 +56,18 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new RegisterRequest("a@b.c", "secret123", "student"))))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"))
                 .andExpect(jsonPath("$.message").value("bad role"));
     }
 
     @Test
-    void validationErrorReturnsFieldDetails() throws Exception {
+    void validationErrorIncludesFieldSummary() throws Exception {
         mvc.perform(post("/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"\",\"password\":\"\",\"role\":\"\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Validation failed"))
-                .andExpect(jsonPath("$.details.fields").exists());
+                .andExpect(jsonPath("$.code").value("400"))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.startsWith("Validation failed")));
     }
 
     @Test
@@ -76,11 +78,12 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new RegisterRequest("a@b.c", "secret123", "student"))))
                 .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("500"))
                 .andExpect(jsonPath("$.message").value("Internal server error"));
     }
 
     @Test
-    void successPathReturns201() throws Exception {
+    void successPathIsWrappedInEnvelope() throws Exception {
         UserResponse u = new UserResponse("id-1", "a@b.c", "student", Instant.now());
         when(service.register(any())).thenReturn(u);
 
@@ -88,6 +91,9 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new RegisterRequest("a@b.c", "secret123", "student"))))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value("id-1"));
+                .andExpect(jsonPath("$.code").value("201"))
+                .andExpect(jsonPath("$.message").value("Created"))
+                .andExpect(jsonPath("$.data.id").value("id-1"))
+                .andExpect(jsonPath("$.pagination").doesNotExist());
     }
 }

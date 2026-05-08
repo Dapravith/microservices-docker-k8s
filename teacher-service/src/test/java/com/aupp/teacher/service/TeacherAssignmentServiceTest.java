@@ -1,7 +1,6 @@
 package com.aupp.teacher.service;
 
 import com.aupp.teacher.domain.TeacherAssignment;
-import com.aupp.teacher.dto.AssignmentListResponse;
 import com.aupp.teacher.dto.AssignmentResponse;
 import com.aupp.teacher.dto.CreateAssignmentRequest;
 import com.aupp.teacher.exception.AssignmentNotFoundException;
@@ -83,9 +82,9 @@ class TeacherAssignmentServiceTest {
         TeacherAssignment a = TeacherAssignment.builder().id("1").teacherEmail("ms.smith@x.y").title("X").build();
         when(repo.findByTeacherEmail(eq("ms.smith@x.y"), any(Sort.class))).thenReturn(List.of(a));
 
-        AssignmentListResponse resp = service.search(SMITH, null);
+        List<AssignmentResponse> resp = service.search(SMITH, null);
 
-        assertThat(resp.count()).isEqualTo(1);
+        assertThat(resp).hasSize(1);
         verify(repo, never()).findByTeacherEmailAndTitleRegex(anyString(), anyString(), any());
     }
 
@@ -93,9 +92,9 @@ class TeacherAssignmentServiceTest {
     void searchWithBlankTitleQueryUsesByEmailOnly() {
         when(repo.findByTeacherEmail(anyString(), any(Sort.class))).thenReturn(List.of());
 
-        AssignmentListResponse resp = service.search(SMITH, "   ");
+        List<AssignmentResponse> resp = service.search(SMITH, "   ");
 
-        assertThat(resp.count()).isZero();
+        assertThat(resp).isEmpty();
         verify(repo, never()).findByTeacherEmailAndTitleRegex(anyString(), anyString(), any());
     }
 
@@ -105,9 +104,9 @@ class TeacherAssignmentServiceTest {
         when(repo.findByTeacherEmailAndTitleRegex(eq("ms.smith@x.y"), anyString(), any(Sort.class)))
                 .thenReturn(List.of(a));
 
-        AssignmentListResponse resp = service.search(SMITH, "Algebra");
+        List<AssignmentResponse> resp = service.search(SMITH, "Algebra");
 
-        assertThat(resp.count()).isEqualTo(1);
+        assertThat(resp).hasSize(1);
         verify(repo).findByTeacherEmailAndTitleRegex(eq("ms.smith@x.y"), anyString(), any(Sort.class));
         verify(repo, never()).findByTeacherEmail(anyString(), any(Sort.class));
     }

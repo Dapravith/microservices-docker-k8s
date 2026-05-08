@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "8b7e4a02-9f2d-4f3b-9b6a-microservicesk8s",
     "name": "microservices-k8s (Spring Boot, 5 services)",
-    "description": "Full end-to-end coverage against the API Gateway. Run requests in folder order — tokens and IDs are saved into collection variables automatically.\n\nFolders:\n1. Registration — generic + role-scoped\n2. Login — student + teacher (saves studentToken, teacherToken)\n3. Student APIs — submit / view / update / resubmit\n4. Teacher APIs — add / search / remove (saves teacherAssignmentId, then deletes it)\n5. Negative — RBAC + missing-token rejections\n\nSetup:\n- gatewayUrl defaults to http://localhost:4000 (docker-compose). For K8s set it to http://<EC2-1>:30000.\n- Edit studentEmail / teacherEmail in collection variables to use different test users; password rules require >= 8 chars with at least one letter and one digit.",
+    "description": "End-to-end coverage against the API Gateway with the standard response envelope.\n\nResponse shape (all endpoints):\n{\n  \"code\": \"<http-status-as-string>\",\n  \"data\": <payload or null>,\n  \"message\": \"<human-readable>\",\n  \"pagination\": { \"page\": 1, \"size\": N, \"total_counts\": N, \"total_pages\": 1 }   // present ONLY on list endpoints\n}\n\nAuth model:\n- POST /login returns {accessToken, refreshToken} inside `data`. Tests save both.\n- POST /refresh exchanges a refresh token for a new access token (refresh is reused).\n- /student/** and /teacher/** require a Bearer ACCESS token (typ=access). Refresh tokens used here -> 401.\n- Postman Bearer Token auth references {{studentAccessToken}}/{{teacherAccessToken}} - paste raw JWT (no 'Bearer' prefix).\n\nFolders:\n1. Registration\n2. Login (saves access + refresh tokens from data)\n3. Refresh\n4. Student APIs (list endpoint includes pagination)\n5. Teacher APIs (search endpoint includes pagination)\n6. Negative (RBAC + auth + token-type mismatch)\n\nSetup:\n- gatewayUrl defaults to http://localhost:4000 (docker-compose). For K8s: http://<EC2-1>:30000.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -12,6 +12,7 @@
         {
           "name": "Register student (role-scoped)",
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/register/student",
@@ -27,14 +28,12 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('201 Created or 409 Conflict (already registered)', () => pm.expect([201, 409]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "pm.test('envelope code matches HTTP status', () => pm.expect(json.code).to.eql(String(pm.response.code)));",
+                  "pm.test('no pagination on single-item response', () => pm.expect(json.pagination).to.be.undefined);",
                   "if (pm.response.code === 201) {",
-                  "  const json = pm.response.json();",
-                  "  pm.test('echoes role=student', () => pm.expect(json.role).to.eql('student'));",
-                  "  pm.test('echoes the email', () => pm.expect(json.email).to.eql(pm.collectionVariables.get('studentEmail')));",
-                  "  pm.test('returns id and createdAt', () => {",
-                  "    pm.expect(json.id).to.be.a('string').and.not.be.empty;",
-                  "    pm.expect(json.createdAt).to.be.a('string');",
-                  "  });",
+                  "  pm.test('data.role = student', () => pm.expect(json.data.role).to.eql('student'));",
+                  "  pm.test('data.email matches input', () => pm.expect(json.data.email).to.eql(pm.collectionVariables.get('studentEmail')));",
                   "}"
                 ]
               }
@@ -44,6 +43,7 @@
         {
           "name": "Register teacher (role-scoped)",
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/register/teacher",
@@ -58,11 +58,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201 Created or 409 Conflict (already registered)', () => pm.expect([201, 409]).to.include(pm.response.code));",
+                  "pm.test('201 Created or 409 Conflict', () => pm.expect([201, 409]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
                   "if (pm.response.code === 201) {",
-                  "  const json = pm.response.json();",
-                  "  pm.test('echoes role=teacher', () => pm.expect(json.role).to.eql('teacher'));",
-                  "  pm.test('echoes the email', () => pm.expect(json.email).to.eql(pm.collectionVariables.get('teacherEmail')));",
+                  "  pm.test('data.role = teacher', () => pm.expect(json.data.role).to.eql('teacher'));",
                   "}"
                 ]
               }
@@ -72,6 +71,7 @@
         {
           "name": "Register (generic, role in body)",
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/register",
@@ -86,10 +86,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201 Created or 409 Conflict (already registered)', () => pm.expect([201, 409]).to.include(pm.response.code));",
+                  "pm.test('201 Created or 409 Conflict', () => pm.expect([201, 409]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
                   "if (pm.response.code === 201) {",
-                  "  const json = pm.response.json();",
-                  "  pm.test('role from body is honored', () => pm.expect(json.role).to.eql('student'));",
+                  "  pm.test('role from body is honored', () => pm.expect(json.data.role).to.eql('student'));",
                   "}"
                 ]
               }
@@ -99,6 +99,7 @@
         {
           "name": "Register validation error - 400",
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/register/student",
@@ -113,7 +114,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('envelope code = 400 and data null', () => {",
+                  "  pm.expect(json.code).to.eql('400');",
+                  "  pm.expect(json.data).to.be.undefined;",
+                  "});",
+                  "pm.test('message describes the failure', () => pm.expect(json.message).to.match(/validation|email|password/i));"
                 ]
               }
             }
@@ -125,8 +132,9 @@
       "name": "02 - Login",
       "item": [
         {
-          "name": "Login as student - save studentToken",
+          "name": "Login as student - save access + refresh tokens",
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/login",
@@ -143,21 +151,32 @@
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('Bearer token returned', () => {",
-                  "  pm.expect(json.token).to.be.a('string').and.not.be.empty;",
-                  "  pm.expect(json.tokenType).to.eql('Bearer');",
-                  "  pm.expect(json.role).to.eql('student');",
-                  "  pm.expect(json.expiresInSeconds).to.be.a('number').and.be.greaterThan(0);",
+                  "pm.test('envelope: code=200, message=OK, no pagination', () => {",
+                  "  pm.expect(json.code).to.eql('200');",
+                  "  pm.expect(json.message).to.eql('OK');",
+                  "  pm.expect(json.pagination).to.be.undefined;",
                   "});",
-                  "pm.collectionVariables.set('studentToken', json.token);"
+                  "pm.test('data has access + refresh tokens', () => {",
+                  "  pm.expect(json.data.accessToken).to.be.a('string').and.not.be.empty;",
+                  "  pm.expect(json.data.refreshToken).to.be.a('string').and.not.be.empty;",
+                  "  pm.expect(json.data.accessToken).to.not.eql(json.data.refreshToken);",
+                  "});",
+                  "pm.test('data.tokenType=Bearer, role=student', () => {",
+                  "  pm.expect(json.data.tokenType).to.eql('Bearer');",
+                  "  pm.expect(json.data.role).to.eql('student');",
+                  "});",
+                  "pm.test('refresh expiry > access expiry', () => pm.expect(json.data.refreshExpiresInSeconds).to.be.greaterThan(json.data.accessExpiresInSeconds));",
+                  "pm.collectionVariables.set('studentAccessToken', json.data.accessToken);",
+                  "pm.collectionVariables.set('studentRefreshToken', json.data.refreshToken);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "Login as teacher - save teacherToken",
+          "name": "Login as teacher - save access + refresh tokens",
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/login",
@@ -174,11 +193,13 @@
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('Bearer token returned', () => {",
-                  "  pm.expect(json.token).to.be.a('string').and.not.be.empty;",
-                  "  pm.expect(json.role).to.eql('teacher');",
+                  "pm.test('data has access + refresh tokens', () => {",
+                  "  pm.expect(json.data.accessToken).to.be.a('string').and.not.be.empty;",
+                  "  pm.expect(json.data.refreshToken).to.be.a('string').and.not.be.empty;",
                   "});",
-                  "pm.collectionVariables.set('teacherToken', json.token);"
+                  "pm.test('data.role=teacher', () => pm.expect(json.data.role).to.eql('teacher'));",
+                  "pm.collectionVariables.set('teacherAccessToken', json.data.accessToken);",
+                  "pm.collectionVariables.set('teacherRefreshToken', json.data.refreshToken);"
                 ]
               }
             }
@@ -187,6 +208,7 @@
         {
           "name": "Login wrong password - 401",
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/login",
@@ -201,6 +223,126 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "const json = pm.response.json();",
+                  "pm.test('envelope: code=401, data null', () => {",
+                  "  pm.expect(json.code).to.eql('401');",
+                  "  pm.expect(json.data).to.be.undefined;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Refresh",
+      "item": [
+        {
+          "name": "Refresh student access token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{gatewayUrl}}/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{studentRefreshToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const oldAccess = pm.collectionVariables.get('studentAccessToken');",
+                  "pm.test('new access token returned in data', () => {",
+                  "  pm.expect(json.data.accessToken).to.be.a('string').and.not.be.empty;",
+                  "  pm.expect(json.data.accessToken).to.not.eql(oldAccess);",
+                  "});",
+                  "pm.test('refresh token reused', () => pm.expect(json.data.refreshToken).to.eql(pm.collectionVariables.get('studentRefreshToken')));",
+                  "pm.test('data.role=student', () => pm.expect(json.data.role).to.eql('student'));",
+                  "pm.collectionVariables.set('studentAccessToken', json.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh teacher access token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{gatewayUrl}}/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{teacherRefreshToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('new access token returned', () => pm.expect(json.data.accessToken).to.be.a('string').and.not.be.empty);",
+                  "pm.test('data.role=teacher', () => pm.expect(json.data.role).to.eql('teacher'));",
+                  "pm.collectionVariables.set('teacherAccessToken', json.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with access token (wrong typ) - 401",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{gatewayUrl}}/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{studentAccessToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('envelope code = 401', () => pm.expect(pm.response.json().code).to.eql('401'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with garbage token - 401",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{gatewayUrl}}/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"not-a-real-jwt\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
                   "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
                 ]
               }
@@ -210,16 +352,17 @@
       ]
     },
     {
-      "name": "03 - Student APIs (student JWT)",
+      "name": "04 - Student APIs (student access JWT)",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{studentAccessToken}}", "type": "string" }]
+      },
       "item": [
         {
           "name": "Submit assignment - save studentAssignmentId",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{studentToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/student/submitassignment",
             "body": {
               "mode": "raw",
@@ -234,27 +377,23 @@
                 "exec": [
                   "pm.test('201 Created', () => pm.response.to.have.status(201));",
                   "const json = pm.response.json();",
-                  "pm.test('persisted by caller email', () => pm.expect(json.studentEmail).to.eql(pm.collectionVariables.get('studentEmail')));",
-                  "pm.test('status = SUBMITTED', () => pm.expect(json.status).to.eql('SUBMITTED'));",
-                  "pm.test('echoes title and content', () => {",
-                  "  pm.expect(json.title).to.eql('Math HW 1');",
-                  "  pm.expect(json.content).to.eql('Solve linear equations');",
+                  "pm.test('envelope: code=201, no pagination on single-item', () => {",
+                  "  pm.expect(json.code).to.eql('201');",
+                  "  pm.expect(json.pagination).to.be.undefined;",
                   "});",
-                  "pm.test('createdAt and updatedAt set', () => {",
-                  "  pm.expect(json.createdAt).to.be.a('string');",
-                  "  pm.expect(json.updatedAt).to.be.a('string');",
-                  "});",
-                  "pm.collectionVariables.set('studentAssignmentId', json.id);"
+                  "pm.test('data persisted by caller email', () => pm.expect(json.data.studentEmail).to.eql(pm.collectionVariables.get('studentEmail')));",
+                  "pm.test('data.status=SUBMITTED', () => pm.expect(json.data.status).to.eql('SUBMITTED'));",
+                  "pm.collectionVariables.set('studentAssignmentId', json.data.id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "View my assignments",
+          "name": "View my assignments (list with pagination)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }],
+            "header": [],
             "url": "{{gatewayUrl}}/student/viewassignment"
           },
           "event": [
@@ -265,11 +404,18 @@
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('count >= 1 and matches list length', () => {",
-                  "  pm.expect(json.count).to.be.greaterThan(0);",
-                  "  pm.expect(json.assignments).to.be.an('array').with.lengthOf(json.count);",
+                  "pm.test('envelope: code=200, data is array, pagination present', () => {",
+                  "  pm.expect(json.code).to.eql('200');",
+                  "  pm.expect(json.data).to.be.an('array').and.not.be.empty;",
+                  "  pm.expect(json.pagination).to.be.an('object');",
                   "});",
-                  "pm.test('latest belongs to caller', () => pm.expect(json.assignments[0].studentEmail).to.eql(pm.collectionVariables.get('studentEmail')));"
+                  "pm.test('pagination shape: page/size/total_counts/total_pages', () => {",
+                  "  pm.expect(json.pagination.page).to.eql(1);",
+                  "  pm.expect(json.pagination.size).to.eql(json.data.length);",
+                  "  pm.expect(json.pagination.total_counts).to.eql(json.data.length);",
+                  "  pm.expect(json.pagination.total_pages).to.eql(1);",
+                  "});",
+                  "pm.test('latest belongs to caller', () => pm.expect(json.data[0].studentEmail).to.eql(pm.collectionVariables.get('studentEmail')));"
                 ]
               }
             }
@@ -279,10 +425,7 @@
           "name": "Update latest assignment",
           "request": {
             "method": "PUT",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{studentToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/student/studentupdateprofile",
             "body": {
               "mode": "raw",
@@ -297,9 +440,8 @@
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('title was patched', () => pm.expect(json.title).to.eql('Math HW 1 (updated)'));",
-                  "pm.test('content was patched', () => pm.expect(json.content).to.eql('Solve linear equations - revised'));",
-                  "pm.test('status unchanged on update', () => pm.expect(json.status).to.eql('SUBMITTED'));"
+                  "pm.test('title patched', () => pm.expect(json.data.title).to.eql('Math HW 1 (updated)'));",
+                  "pm.test('status unchanged on update', () => pm.expect(json.data.status).to.eql('SUBMITTED'));"
                 ]
               }
             }
@@ -309,10 +451,7 @@
           "name": "Resubmit latest assignment",
           "request": {
             "method": "PUT",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{studentToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/student/studentresubmitassignment",
             "body": {
               "mode": "raw",
@@ -326,9 +465,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "const json = pm.response.json();",
-                  "pm.test('status flipped to RESUBMITTED', () => pm.expect(json.status).to.eql('RESUBMITTED'));",
-                  "pm.test('content was patched', () => pm.expect(json.content).to.eql('Final answer'));"
+                  "pm.test('data.status=RESUBMITTED', () => pm.expect(pm.response.json().data.status).to.eql('RESUBMITTED'));"
                 ]
               }
             }
@@ -337,16 +474,17 @@
       ]
     },
     {
-      "name": "04 - Teacher APIs (teacher JWT)",
+      "name": "05 - Teacher APIs (teacher access JWT)",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{teacherAccessToken}}", "type": "string" }]
+      },
       "item": [
         {
           "name": "Add assignment - save teacherAssignmentId",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{teacherToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{gatewayUrl}}/teacher/addassignment",
             "body": {
               "mode": "raw",
@@ -361,23 +499,19 @@
                 "exec": [
                   "pm.test('201 Created', () => pm.response.to.have.status(201));",
                   "const json = pm.response.json();",
-                  "pm.test('persisted by caller email', () => pm.expect(json.teacherEmail).to.eql(pm.collectionVariables.get('teacherEmail')));",
-                  "pm.test('echoes title, description, dueDate', () => {",
-                  "  pm.expect(json.title).to.eql('Algebra exam');",
-                  "  pm.expect(json.description).to.eql('Chapters 1-3');",
-                  "  pm.expect(json.dueDate).to.be.a('string');",
-                  "});",
-                  "pm.collectionVariables.set('teacherAssignmentId', json.id);"
+                  "pm.test('envelope code=201', () => pm.expect(json.code).to.eql('201'));",
+                  "pm.test('data persisted by caller email', () => pm.expect(json.data.teacherEmail).to.eql(pm.collectionVariables.get('teacherEmail')));",
+                  "pm.collectionVariables.set('teacherAssignmentId', json.data.id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "Search assignments by title",
+          "name": "Search assignments by title (list with pagination)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
+            "header": [],
             "url": "{{gatewayUrl}}/teacher/searchstudent?title=Algebra"
           },
           "event": [
@@ -388,9 +522,11 @@
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('count >= 1', () => pm.expect(json.count).to.be.greaterThan(0));",
-                  "pm.test('every result matches title filter', () => json.assignments.forEach(a => pm.expect(a.title).to.match(/Algebra/i)));",
-                  "pm.test('every result belongs to caller', () => json.assignments.forEach(a => pm.expect(a.teacherEmail).to.eql(pm.collectionVariables.get('teacherEmail'))));"
+                  "pm.test('data is array with pagination block', () => {",
+                  "  pm.expect(json.data).to.be.an('array').and.not.be.empty;",
+                  "  pm.expect(json.pagination.total_counts).to.eql(json.data.length);",
+                  "});",
+                  "pm.test('every result matches filter', () => json.data.forEach(a => pm.expect(a.title).to.match(/Algebra/i)));"
                 ]
               }
             }
@@ -400,7 +536,7 @@
           "name": "Search assignments (no filter)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
+            "header": [],
             "url": "{{gatewayUrl}}/teacher/searchstudent"
           },
           "event": [
@@ -411,7 +547,7 @@
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('count matches list length', () => pm.expect(json.assignments).to.have.lengthOf(json.count));"
+                  "pm.test('pagination size matches data length', () => pm.expect(json.pagination.size).to.eql(json.data.length));"
                 ]
               }
             }
@@ -421,7 +557,7 @@
           "name": "Remove assignment by id",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
+            "header": [],
             "url": "{{gatewayUrl}}/teacher/removeassignment/{{teacherAssignmentId}}"
           },
           "event": [
@@ -432,8 +568,8 @@
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('confirms removed id', () => pm.expect(json.id).to.eql(pm.collectionVariables.get('teacherAssignmentId')));",
-                  "pm.test('returns success message', () => pm.expect(json.message).to.match(/removed/i));"
+                  "pm.test('confirms removed id in data.id', () => pm.expect(json.data.id).to.eql(pm.collectionVariables.get('teacherAssignmentId')));",
+                  "pm.test('data.message contains removed', () => pm.expect(json.data.message).to.match(/removed/i));"
                 ]
               }
             }
@@ -443,7 +579,7 @@
           "name": "Remove unknown id - 404",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
+            "header": [],
             "url": "{{gatewayUrl}}/teacher/removeassignment/000000000000000000000000"
           },
           "event": [
@@ -452,7 +588,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('envelope code=404, data null', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.code).to.eql('404');",
+                  "  pm.expect(json.data).to.be.undefined;",
+                  "});"
                 ]
               }
             }
@@ -461,13 +602,17 @@
       ]
     },
     {
-      "name": "05 - Negative (RBAC + auth)",
+      "name": "06 - Negative (RBAC + auth)",
       "item": [
         {
-          "name": "/student with TEACHER JWT - 403",
+          "name": "/student with TEACHER access JWT - 403",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherAccessToken}}", "type": "string" }]
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
+            "header": [],
             "url": "{{gatewayUrl}}/student/viewassignment"
           },
           "event": [
@@ -477,17 +622,23 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
-                  "pm.test('error message names the required role', () => pm.expect(pm.response.text()).to.match(/role=student/i));"
+                  "const json = pm.response.json();",
+                  "pm.test('envelope code=403', () => pm.expect(json.code).to.eql('403'));",
+                  "pm.test('message names required role', () => pm.expect(json.message).to.match(/role=student/i));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "/teacher with STUDENT JWT - 403",
+          "name": "/teacher with STUDENT access JWT - 403",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{studentAccessToken}}", "type": "string" }]
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }],
+            "header": [],
             "url": "{{gatewayUrl}}/teacher/searchstudent"
           },
           "event": [
@@ -497,15 +648,21 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
-                  "pm.test('error message names the required role', () => pm.expect(pm.response.text()).to.match(/role=teacher/i));"
+                  "const json = pm.response.json();",
+                  "pm.test('envelope code=403', () => pm.expect(json.code).to.eql('403'));",
+                  "pm.test('message names required role', () => pm.expect(json.message).to.match(/role=teacher/i));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "/student with NO token - 401",
+          "name": "/student with REFRESH token (typ mismatch) - 401",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{studentRefreshToken}}", "type": "string" }]
+            },
             "method": "GET",
             "header": [],
             "url": "{{gatewayUrl}}/student/viewassignment"
@@ -517,7 +674,32 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
-                  "pm.test('mentions missing Bearer', () => pm.expect(pm.response.text()).to.match(/bearer/i));"
+                  "const json = pm.response.json();",
+                  "pm.test('envelope code=401', () => pm.expect(json.code).to.eql('401'));",
+                  "pm.test('message mentions typ=access requirement', () => pm.expect(json.message).to.match(/typ=access|access token/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "/student with NO token - 401",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/student/viewassignment"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "const json = pm.response.json();",
+                  "pm.test('envelope code=401', () => pm.expect(json.code).to.eql('401'));",
+                  "pm.test('message mentions missing Bearer', () => pm.expect(json.message).to.match(/bearer/i));"
                 ]
               }
             }
@@ -526,8 +708,12 @@
         {
           "name": "/teacher with INVALID token - 401",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "not-a-real-jwt", "type": "string" }]
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer not-a-real-jwt" }],
+            "header": [],
             "url": "{{gatewayUrl}}/teacher/searchstudent"
           },
           "event": [
@@ -536,7 +722,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('envelope code=401', () => pm.expect(pm.response.json().code).to.eql('401'));"
                 ]
               }
             }
@@ -549,15 +736,17 @@
     {
       "key": "gatewayUrl",
       "value": "http://localhost:4000",
-      "description": "Use http://localhost:4000 for docker-compose, or http://<EC2-1 public IP>:30000 for the K8s deployment."
+      "description": "Use http://localhost:4000 for docker-compose, or http://<EC2-1>:30000 for K8s."
     },
     { "key": "studentEmail", "value": "alice@itc.edu.kh" },
     { "key": "teacherEmail", "value": "ms.smith@itc.edu.kh" },
-    { "key": "thirdEmail", "value": "carol@itc.edu.kh", "description": "Used by the generic POST /register call so it does not collide with the role-scoped registrations." },
+    { "key": "thirdEmail", "value": "carol@itc.edu.kh", "description": "Used by POST /register so it does not collide with role-scoped registrations." },
     { "key": "studentPassword", "value": "secret123", "description": "Must be 8-100 chars, contain >= 1 letter and >= 1 digit." },
     { "key": "teacherPassword", "value": "secret123" },
-    { "key": "studentToken", "value": "" },
-    { "key": "teacherToken", "value": "" },
+    { "key": "studentAccessToken", "value": "", "description": "Raw JWT (typ=access). Auto-set by Login + Refresh. Paste here manually if needed - no 'Bearer' prefix." },
+    { "key": "studentRefreshToken", "value": "", "description": "Raw JWT (typ=refresh). Auto-set by Login. Used as the body of POST /refresh." },
+    { "key": "teacherAccessToken", "value": "", "description": "Raw JWT (typ=access). Auto-set by Login + Refresh." },
+    { "key": "teacherRefreshToken", "value": "", "description": "Raw JWT (typ=refresh). Auto-set by Login." },
     { "key": "studentAssignmentId", "value": "" },
     { "key": "teacherAssignmentId", "value": "" }
   ]

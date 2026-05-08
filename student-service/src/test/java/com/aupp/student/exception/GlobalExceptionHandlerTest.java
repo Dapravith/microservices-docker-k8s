@@ -4,6 +4,7 @@ import com.aupp.student.controller.AssignmentController;
 import com.aupp.student.dto.AssignmentResponse;
 import com.aupp.student.dto.SubmitAssignmentRequest;
 import com.aupp.student.service.AssignmentService;
+import com.aupp.student.web.ApiResponseAdvice;
 import com.aupp.student.web.CallerIdentity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = AssignmentController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, ApiResponseAdvice.class})
 @TestPropertySource(properties = "spring.data.mongodb.uri=")
 class GlobalExceptionHandlerTest {
 
@@ -40,21 +41,13 @@ class GlobalExceptionHandlerTest {
 
         mvc.perform(get("/viewassignment"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"))
                 .andExpect(jsonPath("$.message").value("identity missing"))
-                .andExpect(jsonPath("$.path").value("/viewassignment"));
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
     void assignmentNotFoundMappedTo404() throws Exception {
-        when(service.updateLatest(any(), any())).thenThrow(new AssignmentNotFoundException("nope"));
-
-        mvc.perform(post("/submitassignment")
-                        .header(CallerIdentity.EMAIL_HEADER, "a@b.c")
-                        .header(CallerIdentity.ROLE_HEADER, "student")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(new SubmitAssignmentRequest("HW", "x"))))
-                .andExpect(status().isCreated()); // sanity: post path uses submit, not update
-
         when(service.submit(any(), any())).thenThrow(new AssignmentNotFoundException("not there"));
         mvc.perform(post("/submitassignment")
                         .header(CallerIdentity.EMAIL_HEADER, "a@b.c")
@@ -62,19 +55,20 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new SubmitAssignmentRequest("HW", "x"))))
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("404"))
                 .andExpect(jsonPath("$.message").value("not there"));
     }
 
     @Test
-    void validationErrorReturnsFieldDetails() throws Exception {
+    void validationErrorIncludesFieldSummary() throws Exception {
         mvc.perform(post("/submitassignment")
                         .header(CallerIdentity.EMAIL_HEADER, "a@b.c")
                         .header(CallerIdentity.ROLE_HEADER, "student")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"\",\"content\":\"x\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Validation failed"))
-                .andExpect(jsonPath("$.details.fields.title").exists());
+                .andExpect(jsonPath("$.code").value("400"))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.startsWith("Validation failed")));
     }
 
     @Test
@@ -83,11 +77,12 @@ class GlobalExceptionHandlerTest {
 
         mvc.perform(get("/viewassignment"))
                 .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("500"))
                 .andExpect(jsonPath("$.message").value("Internal server error"));
     }
 
     @Test
-    void successPathReturns201() throws Exception {
+    void successPathIsWrappedInEnvelope() throws Exception {
         AssignmentResponse r = new AssignmentResponse("1", "a@b.c", "HW", "x", "SUBMITTED", Instant.now(), null);
         when(service.submit(any(), any())).thenReturn(r);
 
@@ -97,6 +92,8 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new SubmitAssignmentRequest("HW", "x"))))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value("1"));
+                .andExpect(jsonPath("$.code").value("201"))
+                .andExpect(jsonPath("$.message").value("Created"))
+                .andExpect(jsonPath("$.data.id").value("1"));
     }
 }

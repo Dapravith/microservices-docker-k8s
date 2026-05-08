@@ -34,13 +34,14 @@ class JwtRoleAuthFilterTest {
         key = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
     }
 
-    private String token(String email, String role, long ttlSeconds) {
+    private String token(String email, String role, String typ, long ttlSeconds) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + ttlSeconds * 1000);
         return Jwts.builder()
                 .subject(email)
                 .claim("email", email)
                 .claim("role", role)
+                .claim("typ", typ)
                 .issuedAt(now)
                 .expiration(exp)
                 .signWith(key)
@@ -60,7 +61,7 @@ class JwtRoleAuthFilterTest {
         GatewayFilter f = filterFactory.apply(role("student"));
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/student/x")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("a@b.c", "teacher", 3600)));
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("a@b.c", "teacher", "access", 3600)));
         f.filter(exchange, passthrough()).block();
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
@@ -70,7 +71,7 @@ class JwtRoleAuthFilterTest {
         GatewayFilter f = filterFactory.apply(role("student"));
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/student/x")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("a@b.c", "student", 3600)));
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("a@b.c", "student", "access", 3600)));
 
         boolean[] reachedDownstream = {false};
         GatewayFilterChain chain = ex -> {
@@ -88,7 +89,37 @@ class JwtRoleAuthFilterTest {
         GatewayFilter f = filterFactory.apply(role("student"));
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/student/x")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("a@b.c", "student", -10)));
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("a@b.c", "student", "access", -10)));
+        f.filter(exchange, passthrough()).block();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void refreshTokenAtProtectedRouteReturns401() {
+        GatewayFilter f = filterFactory.apply(role("student"));
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/student/x")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("a@b.c", "student", "refresh", 3600)));
+        f.filter(exchange, passthrough()).block();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void tokenWithoutTypClaimReturns401() {
+        Date now = new Date();
+        String legacyToken = Jwts.builder()
+                .subject("a@b.c")
+                .claim("email", "a@b.c")
+                .claim("role", "student")
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + 3_600_000))
+                .signWith(key)
+                .compact();
+
+        GatewayFilter f = filterFactory.apply(role("student"));
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/student/x")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + legacyToken));
         f.filter(exchange, passthrough()).block();
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }

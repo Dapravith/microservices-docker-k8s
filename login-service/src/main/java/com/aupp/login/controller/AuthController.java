@@ -1,6 +1,7 @@
 package com.aupp.login.controller;
 
 import com.aupp.login.dto.LoginRequest;
+import com.aupp.login.dto.RefreshRequest;
 import com.aupp.login.dto.TokenResponse;
 import com.aupp.login.service.AuthService;
 import jakarta.validation.Valid;
@@ -20,5 +21,10 @@ public class AuthController {
     @PostMapping("/login")
     public TokenResponse login(@Valid @RequestBody LoginRequest req) {
         return auth.login(req);
+    }
+
+    @PostMapping("/refresh")
+    public TokenResponse refresh(@Valid @RequestBody RefreshRequest req) {
+        return auth.refresh(req);
     }
 }

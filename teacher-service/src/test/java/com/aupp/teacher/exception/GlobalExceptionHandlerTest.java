@@ -4,6 +4,7 @@ import com.aupp.teacher.controller.TeacherAssignmentController;
 import com.aupp.teacher.dto.AssignmentResponse;
 import com.aupp.teacher.dto.CreateAssignmentRequest;
 import com.aupp.teacher.service.TeacherAssignmentService;
+import com.aupp.teacher.web.ApiResponseAdvice;
 import com.aupp.teacher.web.CallerIdentity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = TeacherAssignmentController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, ApiResponseAdvice.class})
 @TestPropertySource(properties = "spring.data.mongodb.uri=")
 class GlobalExceptionHandlerTest {
 
@@ -44,6 +45,7 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new CreateAssignmentRequest("X", null, null))))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"))
                 .andExpect(jsonPath("$.message").value("identity missing"));
     }
 
@@ -55,19 +57,20 @@ class GlobalExceptionHandlerTest {
                         .header(CallerIdentity.EMAIL_HEADER, "ms@x.y")
                         .header(CallerIdentity.ROLE_HEADER, "teacher"))
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("404"))
                 .andExpect(jsonPath("$.message").value("nope"));
     }
 
     @Test
-    void validationErrorReturnsFieldDetails() throws Exception {
+    void validationErrorIncludesFieldSummary() throws Exception {
         mvc.perform(post("/addassignment")
                         .header(CallerIdentity.EMAIL_HEADER, "ms@x.y")
                         .header(CallerIdentity.ROLE_HEADER, "teacher")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"\",\"description\":\"x\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Validation failed"))
-                .andExpect(jsonPath("$.details.fields.title").exists());
+                .andExpect(jsonPath("$.code").value("400"))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.startsWith("Validation failed")));
     }
 
     @Test
@@ -80,11 +83,12 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new CreateAssignmentRequest("X", null, null))))
                 .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("500"))
                 .andExpect(jsonPath("$.message").value("Internal server error"));
     }
 
     @Test
-    void successPathReturns201() throws Exception {
+    void successPathIsWrappedInEnvelope() throws Exception {
         AssignmentResponse r = new AssignmentResponse("1", "ms@x.y", "X", "", null, Instant.now(), null);
         when(service.create(any(), any())).thenReturn(r);
 
@@ -94,6 +98,8 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new CreateAssignmentRequest("X", null, null))))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value("1"));
+                .andExpect(jsonPath("$.code").value("201"))
+                .andExpect(jsonPath("$.message").value("Created"))
+                .andExpect(jsonPath("$.data.id").value("1"));
     }
 }

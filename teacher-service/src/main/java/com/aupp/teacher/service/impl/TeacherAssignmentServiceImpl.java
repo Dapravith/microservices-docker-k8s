@@ -1,7 +1,6 @@
 package com.aupp.teacher.service.impl;
 
 import com.aupp.teacher.domain.TeacherAssignment;
-import com.aupp.teacher.dto.AssignmentListResponse;
 import com.aupp.teacher.dto.AssignmentResponse;
 import com.aupp.teacher.dto.CreateAssignmentRequest;
 import com.aupp.teacher.exception.AssignmentNotFoundException;
@@ -44,7 +43,7 @@ public class TeacherAssignmentServiceImpl implements TeacherAssignmentService {
     }
 
     @Override
-    public AssignmentListResponse search(CallerIdentity caller, String titleQuery) {
+    public List<AssignmentResponse> search(CallerIdentity caller, String titleQuery) {
         requireCaller(caller);
         List<TeacherAssignment> hits;
         if (StringUtils.hasText(titleQuery)) {
@@ -52,7 +51,7 @@ public class TeacherAssignmentServiceImpl implements TeacherAssignmentService {
         } else {
             hits = repo.findByTeacherEmail(caller.email(), BY_CREATED_DESC);
         }
-        return new AssignmentListResponse(hits.size(), hits.stream().map(AssignmentResponse::of).toList());
+        return hits.stream().map(AssignmentResponse::of).toList();
     }
 
     @Override

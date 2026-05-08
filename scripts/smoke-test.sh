@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Smoke test for the gateway-fronted microservice stack.
-# Usage:  ./scripts/smoke-test.sh   (assumes docker compose stack is up on :4000)
-
+# Validates the assignment's 9 scenarios against a running gateway.
+# Usage:
+#   ./scripts/smoke-test.sh                          # docker-compose on localhost:4000
+#   BASE=http://<EC2-1>:30000 ./scripts/smoke-test.sh  # K8s on EC2
 set -u
 BASE="${BASE:-http://localhost:4000}"
 PASS=0
@@ -10,7 +12,7 @@ FAIL=0
 ts=$(date +%s)
 STUDENT_EMAIL="student-${ts}@test.local"
 TEACHER_EMAIL="teacher-${ts}@test.local"
-PASSWORD="Passw0rd!"
+PASSWORD="Passw0rd1"
 
 step() { printf "\n\033[1;36m== %s ==\033[0m\n" "$1"; }
 ok()   { PASS=$((PASS+1)); printf "  \033[1;32mPASS\033[0m %s\n" "$1"; }
@@ -30,6 +32,17 @@ call() {
   fi
 }
 
+# Extract a field from the envelope: env_field <json> <jq-path>
+# We use python to avoid jq dependency on minimal Ubuntu nodes.
+env_field() {
+  python3 -c "import json,sys; d=json.loads(sys.argv[1]); k=sys.argv[2].split('.');
+o=d
+for p in k:
+    o=o.get(p) if isinstance(o,dict) else None
+    if o is None: break
+print(o or '')" "$1" "$2"
+}
+
 step "Gateway healthcheck"
 call GET /actuator/health 200
 
@@ -43,18 +56,30 @@ step "Reject duplicate registration"
 call POST /register/student 409 "{\"email\":\"$STUDENT_EMAIL\",\"password\":\"$PASSWORD\"}"
 
 step "Login as student"
-STUDENT_TOKEN=$(curl -sS -X POST "$BASE/login" \
+LOGIN_BODY=$(curl -sS -X POST "$BASE/login" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$STUDENT_EMAIL\",\"password\":\"$PASSWORD\",\"role\":\"student\"}" \
-  | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-[[ -n "$STUDENT_TOKEN" ]] && ok "student JWT acquired (${#STUDENT_TOKEN} chars)" || bad "student login" "no token"
+  -d "{\"email\":\"$STUDENT_EMAIL\",\"password\":\"$PASSWORD\",\"role\":\"student\"}")
+STUDENT_TOKEN=$(env_field "$LOGIN_BODY" "data.accessToken")
+STUDENT_REFRESH=$(env_field "$LOGIN_BODY" "data.refreshToken")
+[[ -n "$STUDENT_TOKEN" ]] && ok "student access JWT acquired (${#STUDENT_TOKEN} chars)" || bad "student login" "$LOGIN_BODY"
+[[ -n "$STUDENT_REFRESH" ]] && ok "student refresh JWT acquired" || bad "student login refresh" "$LOGIN_BODY"
 
 step "Login as teacher"
-TEACHER_TOKEN=$(curl -sS -X POST "$BASE/login" \
+LOGIN_BODY=$(curl -sS -X POST "$BASE/login" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$TEACHER_EMAIL\",\"password\":\"$PASSWORD\",\"role\":\"teacher\"}" \
-  | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-[[ -n "$TEACHER_TOKEN" ]] && ok "teacher JWT acquired (${#TEACHER_TOKEN} chars)" || bad "teacher login" "no token"
+  -d "{\"email\":\"$TEACHER_EMAIL\",\"password\":\"$PASSWORD\",\"role\":\"teacher\"}")
+TEACHER_TOKEN=$(env_field "$LOGIN_BODY" "data.accessToken")
+[[ -n "$TEACHER_TOKEN" ]] && ok "teacher access JWT acquired (${#TEACHER_TOKEN} chars)" || bad "teacher login" "$LOGIN_BODY"
+
+step "Refresh student access token"
+REFRESH_BODY=$(curl -sS -X POST "$BASE/refresh" \
+  -H 'Content-Type: application/json' \
+  -d "{\"refreshToken\":\"$STUDENT_REFRESH\"}")
+NEW_ACCESS=$(env_field "$REFRESH_BODY" "data.accessToken")
+[[ -n "$NEW_ACCESS" && "$NEW_ACCESS" != "$STUDENT_TOKEN" ]] && ok "refresh minted a NEW access token" || bad "refresh" "$REFRESH_BODY"
+
+step "Reject refresh-as-access"
+call GET /student/viewassignment 401 "" "$STUDENT_REFRESH"
 
 step "Reject /student without token"
 call GET /student/viewassignment 401
@@ -62,14 +87,25 @@ call GET /student/viewassignment 401
 step "Reject /teacher without token"
 call GET /teacher/searchstudent 401
 
-step "Reject /student with teacher token (wrong role)"
-call GET /student/viewassignment 403 "" "$TEACHER_TOKEN"
+step "/student with student JWT - DB write"
+call POST /student/submitassignment 201 \
+  '{"title":"Math HW 1","content":"Solve linear equations"}' "$STUDENT_TOKEN"
 
-step "Allow /student with student token"
+step "/student with student JWT - DB read (list with pagination)"
 call GET /student/viewassignment 200 "" "$STUDENT_TOKEN"
 
-step "Allow /teacher with teacher token"
+step "/teacher with teacher JWT - DB write"
+call POST /teacher/addassignment 201 \
+  '{"title":"Algebra exam","description":"Ch 1-3","dueDate":"2026-12-31T23:59:00Z"}' "$TEACHER_TOKEN"
+
+step "/teacher with teacher JWT - DB read (search with pagination)"
 call GET /teacher/searchstudent 200 "" "$TEACHER_TOKEN"
+
+step "/student with TEACHER JWT - 403 (will not work)"
+call GET /student/viewassignment 403 "" "$TEACHER_TOKEN"
+
+step "/teacher with STUDENT JWT - 403 (will not work)"
+call GET /teacher/searchstudent 403 "" "$STUDENT_TOKEN"
 
 printf "\n\033[1m%d passed, %d failed\033[0m\n" "$PASS" "$FAIL"
 [[ $FAIL -eq 0 ]] || exit 1

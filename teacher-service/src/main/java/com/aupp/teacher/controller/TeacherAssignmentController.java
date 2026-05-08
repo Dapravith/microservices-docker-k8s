@@ -1,6 +1,5 @@
 package com.aupp.teacher.controller;
 
-import com.aupp.teacher.dto.AssignmentListResponse;
 import com.aupp.teacher.dto.AssignmentResponse;
 import com.aupp.teacher.dto.CreateAssignmentRequest;
 import com.aupp.teacher.service.TeacherAssignmentService;
@@ -17,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -38,7 +38,7 @@ public class TeacherAssignmentController {
     }
 
     @GetMapping("/searchstudent")
-    public AssignmentListResponse search(
+    public List<AssignmentResponse> search(
             @RequestHeader(value = CallerIdentity.EMAIL_HEADER, required = false) String email,
             @RequestHeader(value = CallerIdentity.ROLE_HEADER, required = false) String role,
             @RequestParam(value = "title", required = false) String title) {

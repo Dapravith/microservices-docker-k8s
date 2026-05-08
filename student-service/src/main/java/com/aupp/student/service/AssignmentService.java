@@ -1,16 +1,17 @@
 package com.aupp.student.service;
 
-import com.aupp.student.dto.AssignmentListResponse;
 import com.aupp.student.dto.AssignmentResponse;
 import com.aupp.student.dto.SubmitAssignmentRequest;
 import com.aupp.student.dto.UpdateAssignmentRequest;
 import com.aupp.student.web.CallerIdentity;
 
+import java.util.List;
+
 public interface AssignmentService {
 
     AssignmentResponse submit(CallerIdentity caller, SubmitAssignmentRequest req);
 
-    AssignmentListResponse listMine(CallerIdentity caller);
+    List<AssignmentResponse> listMine(CallerIdentity caller);
 
     AssignmentResponse updateLatest(CallerIdentity caller, UpdateAssignmentRequest req);
 

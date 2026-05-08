@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
@@ -51,6 +51,12 @@ public class JwtRoleAuthFilter extends AbstractGatewayFilterFactory<JwtRoleAuthF
                 return reject(exchange, HttpStatus.UNAUTHORIZED, "Invalid or expired token");
             }
 
+            String typ = claims.get("typ", String.class);
+            if (!"access".equals(typ)) {
+                return reject(exchange, HttpStatus.UNAUTHORIZED,
+                        "Use an access token here (typ=access). Got typ=" + typ + ". Refresh tokens are only valid at /refresh.");
+            }
+
             String role = claims.get("role", String.class);
             String emailClaim = claims.get("email", String.class);
             final String email = emailClaim != null ? emailClaim : claims.getSubject();
@@ -74,18 +80,14 @@ public class JwtRoleAuthFilter extends AbstractGatewayFilterFactory<JwtRoleAuthF
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(status);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        Map<String, Object> body = Map.of(
-                "timestamp", Instant.now().toString(),
-                "status", status.value(),
-                "error", status.getReasonPhrase(),
-                "message", message,
-                "path", exchange.getRequest().getURI().getPath()
-        );
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", String.valueOf(status.value()));
+        body.put("message", message);
         byte[] bytes;
         try {
             bytes = MAPPER.writeValueAsBytes(body);
         } catch (JsonProcessingException e) {
-            bytes = ("{\"message\":\"" + message + "\"}").getBytes();
+            bytes = ("{\"code\":\"" + status.value() + "\",\"message\":\"" + message + "\"}").getBytes();
         }
         DataBuffer buffer = response.bufferFactory().wrap(bytes);
         return response.writeWith(Mono.just(buffer));

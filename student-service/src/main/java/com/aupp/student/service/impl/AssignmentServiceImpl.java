@@ -2,7 +2,6 @@ package com.aupp.student.service.impl;
 
 import com.aupp.student.domain.Assignment;
 import com.aupp.student.domain.AssignmentStatus;
-import com.aupp.student.dto.AssignmentListResponse;
 import com.aupp.student.dto.AssignmentResponse;
 import com.aupp.student.dto.SubmitAssignmentRequest;
 import com.aupp.student.dto.UpdateAssignmentRequest;
@@ -45,10 +44,10 @@ public class AssignmentServiceImpl implements AssignmentService {
     }
 
     @Override
-    public AssignmentListResponse listMine(CallerIdentity caller) {
+    public List<AssignmentResponse> listMine(CallerIdentity caller) {
         requireCaller(caller);
-        List<Assignment> mine = repo.findByStudentEmail(caller.email(), BY_CREATED_DESC);
-        return new AssignmentListResponse(mine.size(), mine.stream().map(AssignmentResponse::of).toList());
+        return repo.findByStudentEmail(caller.email(), BY_CREATED_DESC)
+                .stream().map(AssignmentResponse::of).toList();
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.aupp.login.controller.AuthController;
 import com.aupp.login.dto.LoginRequest;
 import com.aupp.login.dto.TokenResponse;
 import com.aupp.login.service.AuthService;
+import com.aupp.login.web.ApiResponseAdvice;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, ApiResponseAdvice.class})
 class GlobalExceptionHandlerTest {
 
     @Autowired MockMvc mvc;
@@ -31,16 +32,17 @@ class GlobalExceptionHandlerTest {
     @MockBean AuthService auth;
 
     @Test
-    void invalidCredentialsMappedTo401WithApiError() throws Exception {
+    void invalidCredentialsMappedTo401WithApiResponseEnvelope() throws Exception {
         when(auth.login(any())).thenThrow(new InvalidCredentialsException("bad"));
 
         mvc.perform(post("/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new LoginRequest("a@b.c", "x", "student"))))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.code").value("401"))
                 .andExpect(jsonPath("$.message").value("bad"))
-                .andExpect(jsonPath("$.path").value("/login"));
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andExpect(jsonPath("$.pagination").doesNotExist());
     }
 
     @Test
@@ -51,17 +53,18 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new LoginRequest("a@b.c", "pwd", "student"))))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"))
                 .andExpect(jsonPath("$.message").value("bad role"));
     }
 
     @Test
-    void validationErrorReturnsFieldDetails() throws Exception {
+    void validationErrorIncludesFieldSummary() throws Exception {
         mvc.perform(post("/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"\",\"password\":\"\",\"role\":\"\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Validation failed"))
-                .andExpect(jsonPath("$.details.fields").exists());
+                .andExpect(jsonPath("$.code").value("400"))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.startsWith("Validation failed")));
     }
 
     @Test
@@ -72,15 +75,21 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new LoginRequest("a@b.c", "pwd", "student"))))
                 .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("500"))
                 .andExpect(jsonPath("$.message").value("Internal server error"));
     }
 
     @Test
-    void successPathStillWorks() throws Exception {
-        when(auth.login(any())).thenReturn(TokenResponse.bearer("t", 60, "student"));
+    void successPathIsWrappedInEnvelope() throws Exception {
+        when(auth.login(any())).thenReturn(TokenResponse.bearer("access.t", "refresh.t", 60, 600, "student"));
         mvc.perform(post("/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new LoginRequest("a@b.c", "pwd", "student"))))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("200"))
+                .andExpect(jsonPath("$.message").value("OK"))
+                .andExpect(jsonPath("$.data.accessToken").value("access.t"))
+                .andExpect(jsonPath("$.data.refreshToken").value("refresh.t"))
+                .andExpect(jsonPath("$.pagination").doesNotExist());
     }
 }

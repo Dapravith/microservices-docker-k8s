@@ -22,7 +22,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "de.flapdoodle.mongodb.embedded.version=7.0.5")
+@TestPropertySource(properties = {
+        "de.flapdoodle.mongodb.embedded.version=7.0.5",
+        "spring.data.mongodb.uri=mongodb://localhost/test"
+})
 class AssignmentApiIntegrationTest {
 
     @Autowired
@@ -46,8 +49,11 @@ class AssignmentApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(req)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.studentEmail").value("alice@itc.edu.kh"))
-                .andExpect(jsonPath("$.title").value("Math HW1"));
+                .andExpect(jsonPath("$.code").value("201"))
+                .andExpect(jsonPath("$.message").value("Created"))
+                .andExpect(jsonPath("$.data.studentEmail").value("alice@itc.edu.kh"))
+                .andExpect(jsonPath("$.data.title").value("Math HW1"))
+                .andExpect(jsonPath("$.pagination").doesNotExist());
 
         SubmitAssignmentRequest req2 = new SubmitAssignmentRequest("Other student work", "...");
         mvc.perform(post("/submitassignment")
@@ -61,8 +67,14 @@ class AssignmentApiIntegrationTest {
                         .header(CallerIdentity.EMAIL_HEADER, "alice@itc.edu.kh")
                         .header(CallerIdentity.ROLE_HEADER, "student"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.count").value(1))
-                .andExpect(jsonPath("$.assignments[0].studentEmail").value("alice@itc.edu.kh"));
+                .andExpect(jsonPath("$.code").value("200"))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].studentEmail").value("alice@itc.edu.kh"))
+                .andExpect(jsonPath("$.pagination.page").value(1))
+                .andExpect(jsonPath("$.pagination.size").value(1))
+                .andExpect(jsonPath("$.pagination.total_counts").value(1))
+                .andExpect(jsonPath("$.pagination.total_pages").value(1));
     }
 
     @Test
@@ -71,7 +83,8 @@ class AssignmentApiIntegrationTest {
         mvc.perform(post("/submitassignment")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(req)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"));
     }
 
     @Test
@@ -90,7 +103,8 @@ class AssignmentApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(patch)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("HW1 (rev)"))
-                .andExpect(jsonPath("$.content").value("v2"));
+                .andExpect(jsonPath("$.code").value("200"))
+                .andExpect(jsonPath("$.data.title").value("HW1 (rev)"))
+                .andExpect(jsonPath("$.data.content").value("v2"));
     }
 }

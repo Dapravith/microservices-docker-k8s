@@ -2,7 +2,6 @@ package com.aupp.student.service;
 
 import com.aupp.student.domain.Assignment;
 import com.aupp.student.domain.AssignmentStatus;
-import com.aupp.student.dto.AssignmentListResponse;
 import com.aupp.student.dto.AssignmentResponse;
 import com.aupp.student.dto.SubmitAssignmentRequest;
 import com.aupp.student.dto.UpdateAssignmentRequest;
@@ -85,10 +84,10 @@ class AssignmentServiceTest {
         when(repo.findByStudentEmail("alice@x.y", Sort.by(Sort.Direction.DESC, "createdAt")))
                 .thenReturn(List.of(a1, a2));
 
-        AssignmentListResponse resp = service.listMine(ALICE);
+        List<AssignmentResponse> resp = service.listMine(ALICE);
 
-        assertThat(resp.count()).isEqualTo(2);
-        assertThat(resp.assignments()).extracting(AssignmentResponse::id).containsExactly("1", "2");
+        assertThat(resp).hasSize(2);
+        assertThat(resp).extracting(AssignmentResponse::id).containsExactly("1", "2");
     }
 
     @Test

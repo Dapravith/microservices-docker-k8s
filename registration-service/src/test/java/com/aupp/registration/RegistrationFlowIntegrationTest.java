@@ -19,7 +19,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "de.flapdoodle.mongodb.embedded.version=7.0.5")
+@TestPropertySource(properties = {
+        "de.flapdoodle.mongodb.embedded.version=7.0.5",
+        "spring.data.mongodb.uri=mongodb://localhost/test"
+})
 class RegistrationFlowIntegrationTest {
 
     @Autowired MockMvc mvc;
@@ -39,10 +42,13 @@ class RegistrationFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(req)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.email").value("alice@itc.edu.kh"))
-                .andExpect(jsonPath("$.role").value("student"))
-                .andExpect(jsonPath("$.id").isNotEmpty())
-                .andExpect(jsonPath("$.createdAt").isNotEmpty());
+                .andExpect(jsonPath("$.code").value("201"))
+                .andExpect(jsonPath("$.message").value("Created"))
+                .andExpect(jsonPath("$.data.email").value("alice@itc.edu.kh"))
+                .andExpect(jsonPath("$.data.role").value("student"))
+                .andExpect(jsonPath("$.data.id").isNotEmpty())
+                .andExpect(jsonPath("$.data.createdAt").isNotEmpty())
+                .andExpect(jsonPath("$.pagination").doesNotExist());
     }
 
     @Test
@@ -57,6 +63,7 @@ class RegistrationFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(first)))
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("409"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("already exists")));
     }
 
@@ -66,7 +73,8 @@ class RegistrationFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"not-an-email\",\"password\":\"secret123\",\"role\":\"student\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.details.fields.email").exists());
+                .andExpect(jsonPath("$.code").value("400"))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("email")));
     }
 
     @Test
@@ -75,7 +83,7 @@ class RegistrationFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"a@b.c\",\"password\":\"short1\",\"role\":\"student\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.details.fields.password").exists());
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("password")));
     }
 
     @Test
@@ -84,7 +92,7 @@ class RegistrationFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"a@b.c\",\"password\":\"NoDigitsHere\",\"role\":\"student\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.details.fields.password").exists());
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("password")));
     }
 
     @Test
@@ -93,7 +101,7 @@ class RegistrationFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"a@b.c\",\"password\":\"secret123\",\"role\":\"admin\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.details.fields.role").exists());
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("role")));
     }
 
     @Test
@@ -104,7 +112,7 @@ class RegistrationFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(req)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.role").value("student"));
+                .andExpect(jsonPath("$.data.role").value("student"));
     }
 
     @Test
@@ -115,6 +123,6 @@ class RegistrationFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(req)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.role").value("teacher"));
+                .andExpect(jsonPath("$.data.role").value("teacher"));
     }
 }

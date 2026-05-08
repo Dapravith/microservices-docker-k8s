@@ -1,6 +1,6 @@
 package com.aupp.login.exception;
 
-import jakarta.servlet.http.HttpServletRequest;
+import com.aupp.login.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -9,9 +9,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -20,37 +17,31 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException ex, HttpServletRequest req) {
-        return error(HttpStatus.UNAUTHORIZED, ex.getMessage(), req);
+    public ResponseEntity<ApiResponse<Void>> handleInvalidCredentials(InvalidCredentialsException ex) {
+        return error(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex, HttpServletRequest req) {
-        return error(HttpStatus.BAD_REQUEST, ex.getMessage(), req);
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(IllegalArgumentException ex) {
+        return error(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest req) {
-        Map<String, Object> details = new HashMap<>();
-        details.put("fields", ex.getBindingResult().getFieldErrors().stream()
-                .collect(Collectors.toMap(
-                        org.springframework.validation.FieldError::getField,
-                        f -> f.getDefaultMessage() == null ? "invalid" : f.getDefaultMessage(),
-                        (a, b) -> a)));
-        return ResponseEntity.badRequest().body(
-                new ApiError(Instant.now(), HttpStatus.BAD_REQUEST.value(), "Validation failed", req.getRequestURI(), details));
+    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
+        String fieldSummary = ex.getBindingResult().getFieldErrors().stream()
+                .map(f -> f.getField() + ": " + (f.getDefaultMessage() == null ? "invalid" : f.getDefaultMessage()))
+                .collect(Collectors.joining("; "));
+        String message = fieldSummary.isEmpty() ? "Validation failed" : "Validation failed - " + fieldSummary;
+        return error(HttpStatus.BAD_REQUEST, message);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleAny(Exception ex, HttpServletRequest req) {
-        log.error("Unhandled exception on {}", req.getRequestURI(), ex);
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error", req);
+    public ResponseEntity<ApiResponse<Void>> handleAny(Exception ex) {
+        log.error("Unhandled exception", ex);
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
     }
 
-    private ResponseEntity<ApiError> error(HttpStatus status, String message, HttpServletRequest req) {
-        return ResponseEntity.status(status).body(
-                new ApiError(Instant.now(), status.value(), message, req.getRequestURI(), null));
+    private ResponseEntity<ApiResponse<Void>> error(HttpStatus status, String message) {
+        return ResponseEntity.status(status).body(ApiResponse.error(status.value(), message));
     }
-
-    public record ApiError(Instant timestamp, int status, String message, String path, Map<String, Object> details) {}
 }

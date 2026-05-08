@@ -1,6 +1,6 @@
 package com.aupp.registration.exception;
 
-import jakarta.servlet.http.HttpServletRequest;
+import com.aupp.registration.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -9,8 +9,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.Instant;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -19,35 +17,31 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(UserAlreadyExistsException.class)
-    public ResponseEntity<ApiError> handleConflict(UserAlreadyExistsException ex, HttpServletRequest req) {
-        return error(HttpStatus.CONFLICT, ex.getMessage(), req, null);
+    public ResponseEntity<ApiResponse<Void>> handleConflict(UserAlreadyExistsException ex) {
+        return error(HttpStatus.CONFLICT, ex.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex, HttpServletRequest req) {
-        return error(HttpStatus.BAD_REQUEST, ex.getMessage(), req, null);
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(IllegalArgumentException ex) {
+        return error(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest req) {
-        Map<String, Object> details = Map.of("fields", ex.getBindingResult().getFieldErrors().stream()
-                .collect(Collectors.toMap(
-                        org.springframework.validation.FieldError::getField,
-                        f -> f.getDefaultMessage() == null ? "invalid" : f.getDefaultMessage(),
-                        (a, b) -> a)));
-        return error(HttpStatus.BAD_REQUEST, "Validation failed", req, details);
+    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
+        String fieldSummary = ex.getBindingResult().getFieldErrors().stream()
+                .map(f -> f.getField() + ": " + (f.getDefaultMessage() == null ? "invalid" : f.getDefaultMessage()))
+                .collect(Collectors.joining("; "));
+        String message = fieldSummary.isEmpty() ? "Validation failed" : "Validation failed - " + fieldSummary;
+        return error(HttpStatus.BAD_REQUEST, message);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleAny(Exception ex, HttpServletRequest req) {
-        log.error("Unhandled exception on {}", req.getRequestURI(), ex);
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error", req, null);
+    public ResponseEntity<ApiResponse<Void>> handleAny(Exception ex) {
+        log.error("Unhandled exception", ex);
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
     }
 
-    private ResponseEntity<ApiError> error(HttpStatus status, String message, HttpServletRequest req, Map<String, Object> details) {
-        return ResponseEntity.status(status).body(
-                new ApiError(Instant.now(), status.value(), message, req.getRequestURI(), details));
+    private ResponseEntity<ApiResponse<Void>> error(HttpStatus status, String message) {
+        return ResponseEntity.status(status).body(ApiResponse.error(status.value(), message));
     }
-
-    public record ApiError(Instant timestamp, int status, String message, String path, Map<String, Object> details) {}
 }

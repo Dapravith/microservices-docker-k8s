@@ -23,7 +23,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "de.flapdoodle.mongodb.embedded.version=7.0.5")
+@TestPropertySource(properties = {
+        "de.flapdoodle.mongodb.embedded.version=7.0.5",
+        "spring.data.mongodb.uri=mongodb://localhost/test"
+})
 class TeacherApiIntegrationTest {
 
     @Autowired
@@ -47,12 +50,15 @@ class TeacherApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(req)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.teacherEmail").value("ms.smith@itc.edu.kh"))
-                .andExpect(jsonPath("$.title").value("Algebra exam"));
+                .andExpect(jsonPath("$.code").value("201"))
+                .andExpect(jsonPath("$.message").value("Created"))
+                .andExpect(jsonPath("$.data.teacherEmail").value("ms.smith@itc.edu.kh"))
+                .andExpect(jsonPath("$.data.title").value("Algebra exam"))
+                .andExpect(jsonPath("$.pagination").doesNotExist());
     }
 
     @Test
-    void searchReturnsOnlyOwnAssignments() throws Exception {
+    void searchReturnsOnlyOwnAssignmentsAndIncludesPagination() throws Exception {
         mvc.perform(post("/addassignment")
                         .header(CallerIdentity.EMAIL_HEADER, "ms.smith@itc.edu.kh")
                         .header(CallerIdentity.ROLE_HEADER, "teacher")
@@ -70,8 +76,14 @@ class TeacherApiIntegrationTest {
                         .header(CallerIdentity.EMAIL_HEADER, "ms.smith@itc.edu.kh")
                         .header(CallerIdentity.ROLE_HEADER, "teacher"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.count").value(1))
-                .andExpect(jsonPath("$.assignments[0].title").value("Algebra"));
+                .andExpect(jsonPath("$.code").value("200"))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].title").value("Algebra"))
+                .andExpect(jsonPath("$.pagination.page").value(1))
+                .andExpect(jsonPath("$.pagination.size").value(1))
+                .andExpect(jsonPath("$.pagination.total_counts").value(1))
+                .andExpect(jsonPath("$.pagination.total_pages").value(1));
     }
 
     @Test
@@ -87,7 +99,8 @@ class TeacherApiIntegrationTest {
         mvc.perform(delete("/removeassignment/" + foreignId)
                         .header(CallerIdentity.EMAIL_HEADER, "intruder@itc.edu.kh")
                         .header(CallerIdentity.ROLE_HEADER, "teacher"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("404"));
     }
 
     @Test
@@ -95,6 +108,7 @@ class TeacherApiIntegrationTest {
         mvc.perform(post("/addassignment")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(new CreateAssignmentRequest("x", "y", null))))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"));
     }
 }

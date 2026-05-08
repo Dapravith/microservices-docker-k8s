@@ -1,8 +1,8 @@
 {
   "info": {
+    "_postman_id": "8b7e4a02-9f2d-4f3b-9b6a-microservicesk8s",
     "name": "microservices-k8s (Spring Boot, 5 services)",
-    "version": "3.0.0",
-    "description": "Full end-to-end coverage against the API Gateway. Run requests in folder order — tokens and IDs are saved into collection variables automatically.\n\n**Folders**\n1. Registration — generic + role-scoped\n2. Login — student + teacher (saves studentToken, teacherToken)\n3. Student APIs — submit / view / update / resubmit\n4. Teacher APIs — add / search / remove (saves teacherAssignmentId, then deletes it)\n5. Negative — RBAC + missing-token rejections\n\n**Setup**\n- `gatewayUrl` defaults to `http://localhost:4000` (docker-compose). For K8s set it to `http://<EC2-1>:30000`.\n- Edit `studentEmail` / `teacherEmail` in collection variables to use different test users; the password rules require ≥ 8 chars with at least one letter and one digit.",
+    "description": "Full end-to-end coverage against the API Gateway. Run requests in folder order — tokens and IDs are saved into collection variables automatically.\n\nFolders:\n1. Registration — generic + role-scoped\n2. Login — student + teacher (saves studentToken, teacherToken)\n3. Student APIs — submit / view / update / resubmit\n4. Teacher APIs — add / search / remove (saves teacherAssignmentId, then deletes it)\n5. Negative — RBAC + missing-token rejections\n\nSetup:\n- gatewayUrl defaults to http://localhost:4000 (docker-compose). For K8s set it to http://<EC2-1>:30000.\n- Edit studentEmail / teacherEmail in collection variables to use different test users; password rules require >= 8 chars with at least one letter and one digit.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -14,11 +14,7 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/register/student",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["register", "student"]
-            },
+            "url": "{{gatewayUrl}}/register/student",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}"
@@ -50,11 +46,7 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/register/teacher",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["register", "teacher"]
-            },
+            "url": "{{gatewayUrl}}/register/teacher",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{teacherEmail}}\",\n  \"password\": \"{{teacherPassword}}\"\n}"
@@ -82,11 +74,7 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/register",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["register"]
-            },
+            "url": "{{gatewayUrl}}/register",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{thirdEmail}}\",\n  \"password\": \"{{studentPassword}}\",\n  \"role\": \"student\"\n}"
@@ -109,15 +97,11 @@
           ]
         },
         {
-          "name": "Register validation error → 400",
+          "name": "Register validation error - 400",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/register/student",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["register", "student"]
-            },
+            "url": "{{gatewayUrl}}/register/student",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"short\"\n}"
@@ -141,15 +125,11 @@
       "name": "02 - Login",
       "item": [
         {
-          "name": "Login as student → save studentToken",
+          "name": "Login as student - save studentToken",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/login",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["login"]
-            },
+            "url": "{{gatewayUrl}}/login",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\",\n  \"role\": \"student\"\n}"
@@ -176,15 +156,11 @@
           ]
         },
         {
-          "name": "Login as teacher → save teacherToken",
+          "name": "Login as teacher - save teacherToken",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/login",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["login"]
-            },
+            "url": "{{gatewayUrl}}/login",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{teacherEmail}}\",\n  \"password\": \"{{teacherPassword}}\",\n  \"role\": \"teacher\"\n}"
@@ -209,15 +185,11 @@
           ]
         },
         {
-          "name": "Login wrong password → 401",
+          "name": "Login wrong password - 401",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/login",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["login"]
-            },
+            "url": "{{gatewayUrl}}/login",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"wrong-password-1\",\n  \"role\": \"student\"\n}"
@@ -241,18 +213,14 @@
       "name": "03 - Student APIs (student JWT)",
       "item": [
         {
-          "name": "Submit assignment → save studentAssignmentId",
+          "name": "Submit assignment - save studentAssignmentId",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{studentToken}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": {
-              "raw": "{{gatewayUrl}}/student/submitassignment",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["student", "submitassignment"]
-            },
+            "url": "{{gatewayUrl}}/student/submitassignment",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"title\": \"Math HW 1\",\n  \"content\": \"Solve linear equations\"\n}"
@@ -287,11 +255,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/student/viewassignment",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["student", "viewassignment"]
-            }
+            "url": "{{gatewayUrl}}/student/viewassignment"
           },
           "event": [
             {
@@ -319,14 +283,10 @@
               { "key": "Authorization", "value": "Bearer {{studentToken}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": {
-              "raw": "{{gatewayUrl}}/student/studentupdateprofile",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["student", "studentupdateprofile"]
-            },
+            "url": "{{gatewayUrl}}/student/studentupdateprofile",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Math HW 1 (updated)\",\n  \"content\": \"Solve linear equations — revised\"\n}"
+              "raw": "{\n  \"title\": \"Math HW 1 (updated)\",\n  \"content\": \"Solve linear equations - revised\"\n}"
             }
           },
           "event": [
@@ -338,7 +298,7 @@
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
                   "pm.test('title was patched', () => pm.expect(json.title).to.eql('Math HW 1 (updated)'));",
-                  "pm.test('content was patched', () => pm.expect(json.content).to.eql('Solve linear equations — revised'));",
+                  "pm.test('content was patched', () => pm.expect(json.content).to.eql('Solve linear equations - revised'));",
                   "pm.test('status unchanged on update', () => pm.expect(json.status).to.eql('SUBMITTED'));"
                 ]
               }
@@ -353,11 +313,7 @@
               { "key": "Authorization", "value": "Bearer {{studentToken}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": {
-              "raw": "{{gatewayUrl}}/student/studentresubmitassignment",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["student", "studentresubmitassignment"]
-            },
+            "url": "{{gatewayUrl}}/student/studentresubmitassignment",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"title\": \"Math HW 1 (resubmitted)\",\n  \"content\": \"Final answer\"\n}"
@@ -384,18 +340,14 @@
       "name": "04 - Teacher APIs (teacher JWT)",
       "item": [
         {
-          "name": "Add assignment → save teacherAssignmentId",
+          "name": "Add assignment - save teacherAssignmentId",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{teacherToken}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": {
-              "raw": "{{gatewayUrl}}/teacher/addassignment",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["teacher", "addassignment"]
-            },
+            "url": "{{gatewayUrl}}/teacher/addassignment",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"title\": \"Algebra exam\",\n  \"description\": \"Chapters 1-3\",\n  \"dueDate\": \"2026-12-31T23:59:00Z\"\n}"
@@ -426,12 +378,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/teacher/searchstudent?title=Algebra",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["teacher", "searchstudent"],
-              "query": [{ "key": "title", "value": "Algebra" }]
-            }
+            "url": "{{gatewayUrl}}/teacher/searchstudent?title=Algebra"
           },
           "event": [
             {
@@ -454,11 +401,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/teacher/searchstudent",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["teacher", "searchstudent"]
-            }
+            "url": "{{gatewayUrl}}/teacher/searchstudent"
           },
           "event": [
             {
@@ -479,11 +422,7 @@
           "request": {
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/teacher/removeassignment/{{teacherAssignmentId}}",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["teacher", "removeassignment", "{{teacherAssignmentId}}"]
-            }
+            "url": "{{gatewayUrl}}/teacher/removeassignment/{{teacherAssignmentId}}"
           },
           "event": [
             {
@@ -501,15 +440,11 @@
           ]
         },
         {
-          "name": "Remove unknown id → 404",
+          "name": "Remove unknown id - 404",
           "request": {
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/teacher/removeassignment/000000000000000000000000",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["teacher", "removeassignment", "000000000000000000000000"]
-            }
+            "url": "{{gatewayUrl}}/teacher/removeassignment/000000000000000000000000"
           },
           "event": [
             {
@@ -529,15 +464,11 @@
       "name": "05 - Negative (RBAC + auth)",
       "item": [
         {
-          "name": "/student with TEACHER JWT → 403",
+          "name": "/student with TEACHER JWT - 403",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{teacherToken}}" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/student/viewassignment",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["student", "viewassignment"]
-            }
+            "url": "{{gatewayUrl}}/student/viewassignment"
           },
           "event": [
             {
@@ -553,15 +484,11 @@
           ]
         },
         {
-          "name": "/teacher with STUDENT JWT → 403",
+          "name": "/teacher with STUDENT JWT - 403",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/teacher/searchstudent",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["teacher", "searchstudent"]
-            }
+            "url": "{{gatewayUrl}}/teacher/searchstudent"
           },
           "event": [
             {
@@ -577,15 +504,11 @@
           ]
         },
         {
-          "name": "/student with NO token → 401",
+          "name": "/student with NO token - 401",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{gatewayUrl}}/student/viewassignment",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["student", "viewassignment"]
-            }
+            "url": "{{gatewayUrl}}/student/viewassignment"
           },
           "event": [
             {
@@ -601,15 +524,11 @@
           ]
         },
         {
-          "name": "/teacher with INVALID token → 401",
+          "name": "/teacher with INVALID token - 401",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer not-a-real-jwt" }],
-            "url": {
-              "raw": "{{gatewayUrl}}/teacher/searchstudent",
-              "host": ["{{gatewayUrl}}"],
-              "path": ["teacher", "searchstudent"]
-            }
+            "url": "{{gatewayUrl}}/teacher/searchstudent"
           },
           "event": [
             {
@@ -635,7 +554,7 @@
     { "key": "studentEmail", "value": "alice@itc.edu.kh" },
     { "key": "teacherEmail", "value": "ms.smith@itc.edu.kh" },
     { "key": "thirdEmail", "value": "carol@itc.edu.kh", "description": "Used by the generic POST /register call so it does not collide with the role-scoped registrations." },
-    { "key": "studentPassword", "value": "secret123", "description": "Must be 8-100 chars, contain ≥ 1 letter and ≥ 1 digit." },
+    { "key": "studentPassword", "value": "secret123", "description": "Must be 8-100 chars, contain >= 1 letter and >= 1 digit." },
     { "key": "teacherPassword", "value": "secret123" },
     { "key": "studentToken", "value": "" },
     { "key": "teacherToken", "value": "" },

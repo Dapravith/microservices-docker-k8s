@@ -1,72 +1,85 @@
-services:
-  mongo:
-    image: mongo:7
-    container_name: ms-mongo
-    # No host port binding: a local mongod already owns 27017.
-    # Services reach this Mongo via the compose network at mongo:27017.
-    volumes:
-      - mongo-data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+# MongoDB Atlas is the database. Non-sensitive config lives in .env;
+# the password and JWT secret are mounted as Docker secrets (./secrets/*.properties),
+# read by Spring Boot via `spring.config.import` in each application.yml.
+# Result: secrets do NOT appear in `docker inspect` or any container env.
+#
+# All services share a single database (ms_k8s) — collections are distinct:
+#   users, assignments, teacher_assignments.
 
+x-mongo-env: &mongo-env
+  MONGO_USER: ${MONGO_USER}
+  MONGO_HOST: ${MONGO_HOST}
+  MONGO_DB: ${MONGO_DB}
+  MONGO_OPTIONS: ${MONGO_OPTIONS}
+
+secrets:
+  mongo_credentials:
+    file: ./secrets/mongo.properties
+  jwt_credentials:
+    file: ./secrets/jwt.properties
+
+services:
   registration:
     build: ./registration-service
     image: ms-registration:1.0
     container_name: ms-registration
     environment:
+      <<: *mongo-env
       PORT: 5003
-      MONGO_URI: mongodb://mongo:27017/auth_db
+    secrets:
+      - source: mongo_credentials
+        target: mongo.properties
+        mode: 0400
     ports:
       - "5003:5003"
-    depends_on:
-      mongo:
-        condition: service_healthy
 
   login:
     build: ./login-service
     image: ms-login:1.0
     container_name: ms-login
     environment:
+      <<: *mongo-env
       PORT: 5002
-      MONGO_URI: mongodb://mongo:27017/auth_db
-      JWT_SECRET: 347186591486_change_me_must_be_at_least_32_chars
-      JWT_EXPIRATION_SECONDS: 86400
+      JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS}
+    secrets:
+      - source: mongo_credentials
+        target: mongo.properties
+        mode: 0400
+      - source: jwt_credentials
+        target: jwt.properties
+        mode: 0400
     ports:
       - "5002:5002"
-    depends_on:
-      mongo:
-        condition: service_healthy
 
   student:
     build: ./student-service
     image: ms-student:1.0
     container_name: ms-student
     environment:
+      <<: *mongo-env
       PORT: 5000
-      MONGO_URI: mongodb://mongo:27017/student_db
+    secrets:
+      - source: mongo_credentials
+        target: mongo.properties
+        mode: 0400
     ports:
       # Host 5000 is owned by macOS AirPlay Receiver, so map to 5010 instead.
       # Container still listens on 5000; the gateway reaches it at student:5000.
       - "5010:5000"
-    depends_on:
-      mongo:
-        condition: service_healthy
 
   teacher:
     build: ./teacher-service
     image: ms-teacher:1.0
     container_name: ms-teacher
     environment:
+      <<: *mongo-env
       PORT: 5001
-      MONGO_URI: mongodb://mongo:27017/teacher_db
+    secrets:
+      - source: mongo_credentials
+        target: mongo.properties
+        mode: 0400
     ports:
       - "5001:5001"
-    depends_on:
-      mongo:
-        condition: service_healthy
 
   gateway:
     build: ./api-gateway
@@ -74,11 +87,14 @@ services:
     container_name: ms-gateway
     environment:
       PORT: 4000
-      JWT_SECRET: 347186591486_change_me_must_be_at_least_32_chars
       LOGIN_SERVICE_URL: http://login:5002
       REGISTRATION_SERVICE_URL: http://registration:5003
       STUDENT_SERVICE_URL: http://student:5000
       TEACHER_SERVICE_URL: http://teacher:5001
+    secrets:
+      - source: jwt_credentials
+        target: jwt.properties
+        mode: 0400
     ports:
       - "4000:4000"
     depends_on:
@@ -86,6 +102,3 @@ services:
       - registration
       - student
       - teacher
-
-volumes:
-  mongo-data:

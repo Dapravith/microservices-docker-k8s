@@ -13,7 +13,7 @@ public class User {
     @Id
     private String id;
 
-    @Indexed(unique = true)
+    @Indexed(unique = true, name = "email_1")
     private String email;
 
     private String passwordHash;

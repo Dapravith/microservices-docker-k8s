@@ -1,6 +1,11 @@
 spring:
   application:
     name: api-gateway
+  config:
+    # JWT_SECRET is mounted as a Docker secret (see docker-compose.yml).
+    # `optional:` prefix lets local dev / tests run without the file present.
+    import:
+      - "optional:file:/run/secrets/jwt.properties"
   cloud:
     gateway:
       routes:

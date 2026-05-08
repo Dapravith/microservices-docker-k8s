@@ -1,9 +1,17 @@
 spring:
   application:
     name: login-service
+  config:
+    # Sensitive values are mounted as Docker secrets (see docker-compose.yml).
+    # `optional:` prefix lets local dev / tests run without the file present.
+    import:
+      - "optional:file:/run/secrets/mongo.properties"
+      - "optional:file:/run/secrets/jwt.properties"
   data:
     mongodb:
-      uri: ${MONGO_URI:mongodb://localhost:27017/auth_db}
+      # Pieces come from .env (docker-compose) or Secret env (k8s).
+      # MONGO_URI, if set, overrides the constructed URI (used by k8s manifests).
+      uri: ${MONGO_URI:mongodb+srv://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_HOST}/${MONGO_DB}?${MONGO_OPTIONS}}
       auto-index-creation: true
   jackson:
     default-property-inclusion: non_null

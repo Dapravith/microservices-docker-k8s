@@ -135,13 +135,6 @@ Every protected route returns:
 * **401** if no/invalid/expired Bearer token
 * **403** if the token's role doesn't match the route's required role
 
-## Tests & coverage
-
-Every service ships with **unit tests** (Mockito + plain JUnit) and
-**integration tests** (Spring Boot context, MockMvc, Flapdoodle embedded
-Mongo, or `WebTestClient` for the gateway). The build fails if line
-coverage drops below **80%** — enforced by JaCoCo's `check` goal.
-
 ```bash
 # All five services in one go:
 ./infra/scripts/test-all.sh
@@ -157,34 +150,6 @@ coverage drops below **80%** — enforced by JaCoCo's `check` goal.
 After `mvn verify` each service's HTML report is at
 `<service>/target/site/jacoco/index.html`.
 
-## Code quality — SonarQube
-
-`sonar-maven-plugin` is wired into every POM, and each service has a
-`sonar-project.properties` describing its analysis scope. To run a full
-scan locally:
-
-```bash
-# 1. Bring up SonarQube (Postgres-backed)
-docker-compose -f docker-compose.sonar.yml up -d
-open http://localhost:9000     # default login admin/admin → change password
-
-# 2. Generate a User Token under Account → Security and export it
-export SONAR_TOKEN=<token>
-
-# 3. Scan everything
-./infra/scripts/sonar-scan.sh
-```
-
-The scan script runs `mvn clean verify` (so JaCoCo XML reports are fresh)
-and then `mvn sonar:sonar` per service. You'll get five projects in
-SonarQube — one per microservice — each with its own coverage,
-duplications, security hotspots, and code smells dashboard.
-
-If you have a hosted instance instead, set `SONAR_HOST` accordingly:
-
-```bash
-SONAR_HOST=https://sonarcloud.io SONAR_TOKEN=… ./infra/scripts/sonar-scan.sh
-```
 
 ## Configuration
 

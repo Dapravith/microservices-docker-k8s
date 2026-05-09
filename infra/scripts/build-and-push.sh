@@ -16,11 +16,11 @@ build_push() {
   docker push "${DOCKERHUB_USER}/${img}:${TAG}"
 }
 
-build_push registration-service ms-registration
-build_push login-service        ms-login
-build_push student-service      ms-student
-build_push teacher-service      ms-teacher
-build_push api-gateway          ms-gateway
+build_push Registration_Microservice  ms-registration
+build_push Authentication_Microservice ms-login
+build_push Student_Microservice       ms-student
+build_push Teacher_Microservice       ms-teacher
+build_push APIGateway_Microservice    ms-gateway
 
 echo
 echo "All five images pushed:"

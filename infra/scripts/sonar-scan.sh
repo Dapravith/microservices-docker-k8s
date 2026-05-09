@@ -26,17 +26,17 @@ scan() {
 
 # verify (with tests + jacoco) was assumed run already — if not, do it now:
 if [ "${RUN_TESTS_FIRST:-true}" = "true" ]; then
-  for svc in registration-service login-service student-service teacher-service api-gateway; do
+  for svc in Registration_Microservice Authentication_Microservice Student_Microservice Teacher_Microservice APIGateway_Microservice; do
     echo "==> mvn verify  $svc"
     ( cd "$ROOT/$svc" && mvn -B clean verify )
   done
 fi
 
-scan registration-service
-scan login-service
-scan student-service
-scan teacher-service
-scan api-gateway
+scan Registration_Microservice
+scan Authentication_Microservice
+scan Student_Microservice
+scan Teacher_Microservice
+scan APIGateway_Microservice
 
 echo
 echo "Done. Open $SONAR_HOST/projects to see the five Sonar projects."

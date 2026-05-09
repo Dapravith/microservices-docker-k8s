@@ -20,7 +20,7 @@ secrets:
 
 services:
   registration:
-    build: ./registration-service
+    build: ./Registration_Microservice
     image: ms-registration:1.0
     container_name: ms-registration
     environment:
@@ -34,7 +34,7 @@ services:
       - "5003:5003"
 
   login:
-    build: authentication-service
+    build: ./Authentication_Microservice
     image: ms-login:1.0
     container_name: ms-login
     environment:
@@ -53,7 +53,7 @@ services:
       - "5002:5002"
 
   student:
-    build: ./student-service
+    build: ./Student_Microservice
     image: ms-student:1.0
     container_name: ms-student
     environment:
@@ -69,7 +69,7 @@ services:
       - "5010:5000"
 
   teacher:
-    build: ./teacher-service
+    build: ./Teacher_Microservice
     image: ms-teacher:1.0
     container_name: ms-teacher
     environment:
@@ -83,7 +83,7 @@ services:
       - "5001:5001"
 
   gateway:
-    build: ./api-gateway
+    build: ./APIGateway_Microservice
     image: ms-gateway:1.0
     container_name: ms-gateway
     environment:

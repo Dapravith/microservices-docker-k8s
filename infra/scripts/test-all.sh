@@ -5,7 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
-for svc in registration-service login-service student-service teacher-service api-gateway; do
+for svc in Registration_Microservice Authentication_Microservice Student_Microservice Teacher_Microservice APIGateway_Microservice; do
   echo
   echo "================ $svc ================"
   ( cd "$ROOT/$svc" && mvn -B clean verify )

@@ -16,7 +16,7 @@ spring:
     default-property-inclusion: non_null
 
 server:
-  port: ${PORT:5008}
+  port: ${PORT:5000}
   shutdown: graceful
 
 management:

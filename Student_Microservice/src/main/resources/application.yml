@@ -4,8 +4,11 @@ spring:
   config:
     # Sensitive values are mounted as Docker secrets (see docker-compose.yml).
     # `optional:` prefix lets local dev / tests run without the file present.
+    # Repo-root paths let `./mvnw spring-boot:run` work without sourcing .env.
     import:
       - "optional:file:/run/secrets/mongo.properties"
+      - "optional:file:../secrets/mongo.properties"
+      - "optional:file:../.env[.properties]"
   data:
     mongodb:
       # Pieces come from .env (docker-compose) or Secret env (k8s).

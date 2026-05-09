@@ -4,8 +4,10 @@ spring:
   config:
     # JWT_SECRET is mounted as a Docker secret (see docker-compose.yml).
     # `optional:` prefix lets local dev / tests run without the file present.
+    # Repo-root path lets `./mvnw spring-boot:run` work without sourcing secrets.
     import:
       - "optional:file:/run/secrets/jwt.properties"
+      - "optional:file:../secrets/jwt.properties"
   cloud:
     gateway:
       routes:

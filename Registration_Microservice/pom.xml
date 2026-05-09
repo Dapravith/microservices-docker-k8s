@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.5</version>
+        <version>3.5.6</version>
         <relativePath/>
     </parent>
 
@@ -19,8 +19,8 @@
     <description>User registration microservice — sole writer of the users collection</description>
 
     <properties>
-        <java.version>21</java.version>
-        <jacoco.version>0.8.12</jacoco.version>
+        <java.version>25</java.version>
+        <jacoco.version>0.8.14</jacoco.version>
         <jacoco.line.coverage>0.80</jacoco.line.coverage>
         <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <sonar.junit.reportPaths>target/surefire-reports</sonar.junit.reportPaths>

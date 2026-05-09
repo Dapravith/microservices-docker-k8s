@@ -3,7 +3,7 @@
 # (frontend) since both serve the edge-auth flow.
 apiVersion: apps/v1
 kind: Deployment
-metadata:
+metadata
   name: registration-service
   namespace: msp
   labels:

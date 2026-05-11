@@ -32,22 +32,28 @@ fi
 echo "Checking Kubernetes connection..."
 
 if ! kubectl cluster-info >/dev/null 2>&1; then
+  if [[ -f /etc/kubernetes/admin.conf ]]; then
+    echo "kubectl unconfigured but /etc/kubernetes/admin.conf exists — fixing kubeconfig..."
+    mkdir -p "$HOME/.kube"
+    sudo cp -f /etc/kubernetes/admin.conf "$HOME/.kube/config"
+    sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
+    chmod 600 "$HOME/.kube/config"
+  fi
+fi
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
   echo "ERROR: kubectl cannot connect to the Kubernetes cluster."
   echo
   echo "Most likely reasons:"
   echo "  1. You are running this script on EC2-2 or EC2-3 worker node."
-  echo "  2. ~/.kube/config is missing."
-  echo "  3. kubeadm init was not completed on EC2-1."
+  echo "  2. /etc/kubernetes/admin.conf is missing (kubeadm init not completed)."
+  echo "  3. The API server pod is not yet running."
   echo
-  echo "Run this on EC2-1 control-plane:"
-  echo "  mkdir -p ~/.kube"
-  echo "  sudo cp -f /etc/kubernetes/admin.conf ~/.kube/config"
-  echo "  sudo chown \$(id -u):\$(id -g) ~/.kube/config"
-  echo "  chmod 600 ~/.kube/config"
-  echo "  kubectl get nodes -o wide"
+  echo "Run this on EC2-1 control-plane first:"
+  echo "  sudo bash infra/scripts/init-control-plane.sh"
   echo
   echo "Current kubectl server:"
-  kubectl config view --minify | grep server || true
+  kubectl config view --minify 2>/dev/null | grep server || echo "  (no context configured)"
   exit 1
 fi
 

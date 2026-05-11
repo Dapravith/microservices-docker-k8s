@@ -13,10 +13,10 @@ echo " Kubernetes version: v${K8S_VERSION}"
 echo " Current host: $(hostname)"
 echo "=================================================="
 
+# Auto re-run with sudo instead of stopping with an error.
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "ERROR: Run with sudo:"
-  echo "  sudo NODE_NAME=ec2-1 bash install-requirements.sh"
-  exit 1
+  echo "==> Re-running with sudo..."
+  exec sudo env NODE_NAME="${NODE_NAME}" K8S_VERSION="${K8S_VERSION}" bash "$0" "$@"
 fi
 
 if [[ -n "${NODE_NAME}" ]]; then
@@ -28,7 +28,7 @@ echo "==> Checking for k3s conflict"
 if command -v k3s >/dev/null 2>&1; then
   echo "ERROR: k3s is installed on this node."
   echo "Do not mix k3s and kubeadm."
-  echo "Remove k3s first if you want to use kubeadm:"
+  echo "Remove k3s first:"
   echo "  sudo /usr/local/bin/k3s-uninstall.sh"
   echo "Then rerun this script."
   exit 1
@@ -123,15 +123,34 @@ echo "IP:"
 hostname -I
 
 echo ""
+echo "Docker:"
 docker --version
+
+echo ""
+echo "Containerd:"
 containerd --version
+
+echo ""
+echo "Kubeadm:"
 kubeadm version
+
+echo ""
+echo "Kubectl:"
 kubectl version --client
+
+echo ""
+echo "crictl:"
 crictl info >/dev/null && echo "crictl OK"
 
 echo ""
 echo "Swap status:"
 free -h | grep Swap
+
+echo ""
+echo "Service status:"
+systemctl is-active docker
+systemctl is-active containerd
+systemctl is-active kubelet || true
 
 echo ""
 echo "=================================================="

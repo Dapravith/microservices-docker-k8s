@@ -15,7 +15,7 @@ echo "=================================================="
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "ERROR: Run with sudo:"
-  echo "  sudo NODE_NAME=ec2-1 bash install-k8s-requirements.sh"
+  echo "  sudo NODE_NAME=ec2-1 bash install-requirements.sh"
   exit 1
 fi
 

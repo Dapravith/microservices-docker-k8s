@@ -1,7 +1,21 @@
 # Deployment guide — three AWS EC2 instances
 
-This walks through bringing up the cluster, deploying the four services,
+This walks through bringing up the cluster, deploying the five services,
 and capturing every screenshot the assignment asks for.
+
+## Required screenshots (assignment deliverables)
+
+| # | Requirement | Captured in step | Command(s) |
+| - | ----------- | ---------------- | ---------- |
+| 1 | **3 EC2 instances** running in AWS | §1 | AWS console → EC2 → Instances (filter: *Running*) |
+| 2 | **Docker image / container on each of the 3 EC2 instances** | §4 + §5 | `sudo crictl images` and `sudo crictl ps` on EC2-1, EC2-2, EC2-3 |
+| 3 | **3 Services and Deployments** across the 3 EC2 instances | §5 | `kubectl -n msp get deploy,svc -o wide` |
+| 4 | **Pods on each EC2 instance** | §5 | `kubectl -n msp get pods -o wide --field-selector spec.nodeName=<node>` for each of the 3 nodes |
+
+> ⚠️ This cluster uses **containerd** (Kubernetes ≥ 1.24 dropped dockershim),
+> so `docker ps` on the nodes will **not** list pod containers. Use
+> `sudo crictl ps` / `sudo crictl images` instead — those talk to the
+> same runtime kubelet uses.
 
 ## 0. Prerequisites
 
@@ -25,8 +39,9 @@ ssh ubuntu@ec2-1 'sudo bash bootstrap-ec2.sh'
 # repeat for ec2-2, ec2-3
 ```
 
-📷 **Screenshot 1 — three EC2 instances**: AWS console showing all three
-in the *Running* state.
+📷 **Screenshot 1 (requirement #1) — three EC2 instances**: AWS console
+→ EC2 → Instances, filtered to *Running*. All three (ec2-1, ec2-2, ec2-3)
+must be visible in a single screenshot.
 
 ## 2. Initialise the control plane (EC2-1 only)
 
@@ -78,8 +93,23 @@ From your laptop or build host:
 DOCKERHUB_USER=youruser bash infra/scripts/build-and-push.sh
 ```
 
-📷 **Screenshot 2 — `docker images` / `docker ps`** on each EC2 after
-the cluster has scheduled the pods (run `docker ps` on each node).
+📷 **Screenshot 2 (requirement #2) — image + container on each EC2**.
+After the cluster has scheduled the pods, SSH into each node and capture
+both commands:
+
+```bash
+ssh ubuntu@ec2-1 'sudo crictl images && echo "---" && sudo crictl ps'
+ssh ubuntu@ec2-2 'sudo crictl images && echo "---" && sudo crictl ps'
+ssh ubuntu@ec2-3 'sudo crictl images && echo "---" && sudo crictl ps'
+```
+
+Expected per node:
+* **ec2-1**: api-gateway, registration-service, login-service, mongo
+* **ec2-2**: student-service
+* **ec2-3**: teacher-service
+
+(`docker ps` will be empty on the nodes — kubelet uses containerd, not
+Docker. Use `crictl`.)
 
 ## 5. Apply the manifests
 
@@ -99,16 +129,33 @@ kubectl -n msp get deploy,svc,statefulset
 kubectl -n msp get pods -o wide
 ```
 
-📷 **Screenshot 3 — Services and Deployments**: output of
-`kubectl -n msp get deploy,svc -o wide`.
+📷 **Screenshot 3 (requirement #3) — Services and Deployments**: a
+single screenshot showing the output of
+`kubectl -n msp get deploy,svc -o wide`. The `NODE` column (visible with
+`-o wide`) is what proves the workloads are spread across the 3 EC2
+instances.
 
-📷 **Screenshot 4 — Pods on each EC2**: filter by node:
+📷 **Screenshot 4 (requirement #4) — Pods on each EC2**. First list the
+nodes so you have their exact kubectl-visible names:
 
 ```bash
-kubectl -n msp get pods -o wide --field-selector spec.nodeName=$EC2_1
-kubectl -n msp get pods -o wide --field-selector spec.nodeName=$EC2_2
-kubectl -n msp get pods -o wide --field-selector spec.nodeName=$EC2_3
+kubectl get nodes -o name
+# e.g. node/ip-10-0-0-1, node/ip-10-0-0-2, node/ip-10-0-0-3
 ```
+
+Then take one screenshot per node (substitute the real node names):
+
+```bash
+kubectl -n msp get pods -o wide --field-selector spec.nodeName=ip-10-0-0-1
+kubectl -n msp get pods -o wide --field-selector spec.nodeName=ip-10-0-0-2
+kubectl -n msp get pods -o wide --field-selector spec.nodeName=ip-10-0-0-3
+```
+
+Expected pods per node:
+* **ec2-1** (`role=frontend, db=mongo`): api-gateway, registration-service,
+  login-service, mongo-0
+* **ec2-2** (`role=student`): student-service
+* **ec2-3** (`role=teacher`): teacher-service
 
 ## 6. Smoke-test from Postman
 

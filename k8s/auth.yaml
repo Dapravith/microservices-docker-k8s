@@ -1,22 +1,20 @@
 ---
-# Pinned to EC2-1 (label role=frontend) per architecture diagram.
-# Co-located with the api-gateway since both sit at the edge.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: login-service
+  name: authentication-service
   namespace: msp
   labels:
-    app: login-service
+    app: authentication-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: login-service
+      app: authentication-service
   template:
     metadata:
       labels:
-        app: login-service
+        app: authentication-service
     spec:
       affinity:
         nodeAffinity:
@@ -27,7 +25,7 @@ spec:
                     operator: In
                     values: [frontend]
       containers:
-        - name: login
+        - name: authentication-service
           image: DOCKERHUB_USER/ms-login:1.0
           imagePullPolicy: Always
           ports:
@@ -60,16 +58,3 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits:   { cpu: 1000m, memory: 768Mi }
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: login
-  namespace: msp
-spec:
-  selector:
-    app: login-service
-  ports:
-    - name: http
-      port: 5002
-      targetPort: 5002

@@ -17,6 +17,42 @@ and capturing every screenshot the assignment asks for.
 > `sudo crictl ps` / `sudo crictl images` instead — those talk to the
 > same runtime kubelet uses.
 
+## Implementation guide at a glance
+
+End-to-end steps, in order. Each one links to the detailed section below.
+
+1. **§0 Prerequisites** — provision 3 EC2 instances, open security-group ports,
+   install `kubectl` locally.
+2. **§1 Bootstrap nodes** — run `bootstrap-ec2.sh` on every EC2.
+3. **§2 Init cluster** — `kubeadm init` on EC2-1, then `kubeadm join` on EC2-2 / EC2-3.
+4. **§3 Label nodes + prep host path** — `mkdir /var/lib/mongo-data` on EC2-1
+   and label nodes with `db=mongo`, `role=frontend|student|teacher`.
+5. **§4 Build & push images** — `build-and-push.sh DOCKERHUB_USER=…`.
+6. **§5 Apply manifests** — substitute `DOCKERHUB_USER`, rotate the JWT
+   secret, then `apply-k8s.sh` applies the 14 files in the right order.
+7. **§6 Smoke-test** — run the Postman collection against the gateway NodePort.
+8. **§7 (optional) SonarQube scan** · **§8 Tear down**.
+
+The k8s/ folder now follows a one-file-per-resource layout:
+
+```
+k8s/
+├── 00-namespace.yaml          # namespace + StorageClass
+├── 01-secrets.yaml            # JWT + Mongo URIs
+├── mongodb.yaml               # PV + PVC + StatefulSet
+├── mongodb-service.yaml       # headless Service
+├── auth.yaml                  # authentication-service Deployment
+├── auth-service.yaml
+├── registration.yaml
+├── registration-service.yaml
+├── student.yaml
+├── student-service.yaml
+├── teacher.yaml
+├── teacher-service.yaml
+├── api-gateway.yaml
+└── api-gateway-service.yaml   # NodePort 30000
+```
+
 ## 0. Prerequisites
 
 * Three EC2 instances (Ubuntu 22.04+, t3.medium or larger, security group
@@ -104,7 +140,7 @@ ssh ubuntu@ec2-3 'sudo crictl images && echo "---" && sudo crictl ps'
 ```
 
 Expected per node:
-* **ec2-1**: api-gateway, registration-service, login-service, mongo
+* **ec2-1**: api-gateway, registration, authentication-service, mongodb
 * **ec2-2**: student-service
 * **ec2-3**: teacher-service
 
@@ -152,8 +188,8 @@ kubectl -n msp get pods -o wide --field-selector spec.nodeName=ip-10-0-0-3
 ```
 
 Expected pods per node:
-* **ec2-1** (`role=frontend, db=mongo`): api-gateway, registration-service,
-  login-service, mongo-0
+* **ec2-1** (`role=frontend, db=mongo`): api-gateway, registration,
+  authentication-service, mongodb-0
 * **ec2-2** (`role=student`): student-service
 * **ec2-3** (`role=teacher`): teacher-service
 
@@ -176,7 +212,7 @@ and run the requests in order:
 Database activity — confirm with mongosh:
 
 ```bash
-kubectl -n msp exec -it statefulset/mongo -- mongosh --quiet --eval '
+kubectl -n msp exec -it statefulset/mongodb -- mongosh --quiet --eval '
   printjson(db.getSiblingDB("auth_db").users.countDocuments({}));
   printjson(db.getSiblingDB("student_db").assignments.find().toArray());
   printjson(db.getSiblingDB("teacher_db").teacher_assignments.find().toArray());
@@ -214,13 +250,13 @@ kubectl delete ns msp
 ## Troubleshooting
 
 * **CrashLoopBackOff on a Spring service** — usually MongoDB isn't ready
-  yet. Check `kubectl -n msp logs statefulset/mongo` and verify the PV is
-  Bound: `kubectl get pv,pvc -A`.
+  yet. Check `kubectl -n msp logs statefulset/mongodb` and verify the PV
+  is Bound: `kubectl get pv,pvc -A`.
 * **403 on every request** — the JWT secret in `app-secrets` doesn't
-  match the one the login pod is using. Re-apply `01-secrets.yaml` and
-  `kubectl -n msp rollout restart deploy/login-service deploy/api-gateway`.
+  match the one the auth pod is using. Re-apply `01-secrets.yaml` and
+  `kubectl -n msp rollout restart deploy/authentication-service deploy/api-gateway`.
 * **Pods scheduled on the wrong node** — the node labels were not
   applied. Re-run `infra/scripts/label-nodes.sh`.
 * **`hostPath` PV not binding** — the directory `/var/lib/mongo-data`
   doesn't exist on the labeled `db=mongo` node. Create it with
-  `sudo mkdir -p` and re-apply `05-mongodb.yaml`.
+  `sudo mkdir -p` and re-apply `mongodb.yaml`.

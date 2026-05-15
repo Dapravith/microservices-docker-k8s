@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Apply Kubernetes manifests in numeric order.
+# Apply Kubernetes manifests for the msp stack.
 # Run this on EC2-1 control-plane only, after:
 # 1. kubeadm init completed
 # 2. EC2-2 and EC2-3 joined the cluster
@@ -73,12 +73,18 @@ echo "Checking required manifest files..."
 REQUIRED_FILES=(
   "00-namespace.yaml"
   "01-secrets.yaml"
-  "05-mongodb.yaml"
-  "10-login.yaml"
-  "15-registration.yaml"
-  "20-student.yaml"
-  "30-teacher.yaml"
-  "40-gateway.yaml"
+  "mongodb.yaml"
+  "mongodb-service.yaml"
+  "auth.yaml"
+  "auth-service.yaml"
+  "registration.yaml"
+  "registration-service.yaml"
+  "student.yaml"
+  "student-service.yaml"
+  "teacher.yaml"
+  "teacher-service.yaml"
+  "api-gateway.yaml"
+  "api-gateway-service.yaml"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -97,25 +103,31 @@ kubectl apply -f "${K8S_DIR}/01-secrets.yaml"
 echo
 
 echo "Applying MongoDB..."
-kubectl apply -f "${K8S_DIR}/05-mongodb.yaml"
+kubectl apply -f "${K8S_DIR}/mongodb.yaml"
+kubectl apply -f "${K8S_DIR}/mongodb-service.yaml"
 
 echo "Waiting for MongoDB rollout..."
-kubectl -n "${NAMESPACE}" rollout status statefulset/mongo --timeout=180s
+kubectl -n "${NAMESPACE}" rollout status statefulset/mongodb --timeout=180s
 echo
 
 echo "Applying application services..."
-kubectl apply -f "${K8S_DIR}/10-login.yaml"
-kubectl apply -f "${K8S_DIR}/15-registration.yaml"
-kubectl apply -f "${K8S_DIR}/20-student.yaml"
-kubectl apply -f "${K8S_DIR}/30-teacher.yaml"
-kubectl apply -f "${K8S_DIR}/40-gateway.yaml"
+kubectl apply -f "${K8S_DIR}/auth.yaml"
+kubectl apply -f "${K8S_DIR}/auth-service.yaml"
+kubectl apply -f "${K8S_DIR}/registration.yaml"
+kubectl apply -f "${K8S_DIR}/registration-service.yaml"
+kubectl apply -f "${K8S_DIR}/student.yaml"
+kubectl apply -f "${K8S_DIR}/student-service.yaml"
+kubectl apply -f "${K8S_DIR}/teacher.yaml"
+kubectl apply -f "${K8S_DIR}/teacher-service.yaml"
+kubectl apply -f "${K8S_DIR}/api-gateway.yaml"
+kubectl apply -f "${K8S_DIR}/api-gateway-service.yaml"
 echo
 
 echo "Waiting for deployments..."
 
 DEPLOYMENTS=(
-  "login-service"
-  "registration-service"
+  "authentication-service"
+  "registration"
   "student-service"
   "teacher-service"
   "api-gateway"

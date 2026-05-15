@@ -1,7 +1,4 @@
 ---
-# Single-node MongoDB for the cluster. The PVC backs onto local-storage so
-# data survives pod restarts. Suitable for the assignment; for prod you'd
-# move to a managed Mongo or a replica-set StatefulSet.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -39,18 +36,20 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: mongo
+  name: mongodb
   namespace: msp
+  labels:
+    app: mongodb
 spec:
-  serviceName: mongo
+  serviceName: mongodb-service
   replicas: 1
   selector:
     matchLabels:
-      app: mongo
+      app: mongodb
   template:
     metadata:
       labels:
-        app: mongo
+        app: mongodb
     spec:
       affinity:
         nodeAffinity:
@@ -61,7 +60,7 @@ spec:
                     operator: In
                     values: [mongo]
       containers:
-        - name: mongo
+        - name: mongodb
           image: mongo:7
           ports:
             - containerPort: 27017
@@ -85,17 +84,3 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: mongo-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mongo
-  namespace: msp
-spec:
-  clusterIP: None
-  selector:
-    app: mongo
-  ports:
-    - name: mongo
-      port: 27017
-      targetPort: 27017

@@ -1,21 +1,20 @@
 ---
-# Pinned to EC2-3 (label role=teacher). Mounts Vol2 per architecture diagram.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: teacher-service
+  name: student-service
   namespace: msp
   labels:
-    app: teacher-service
+    app: student-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: teacher-service
+      app: student-service
   template:
     metadata:
       labels:
-        app: teacher-service
+        app: student-service
     spec:
       affinity:
         nodeAffinity:
@@ -24,33 +23,33 @@ spec:
               - matchExpressions:
                   - key: role
                     operator: In
-                    values: [teacher]
+                    values: [student]
       containers:
-        - name: teacher
-          image: DOCKERHUB_USER/ms-teacher:1.0
+        - name: student
+          image: DOCKERHUB_USER/ms-student:1.0
           imagePullPolicy: Always
           ports:
-            - containerPort: 5001
+            - containerPort: 5000
           env:
             - name: PORT
-              value: "5001"
+              value: "5000"
             - name: MONGO_URI
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
-                  key: MONGO_URI_TEACHER
+                  key: MONGO_URI_STUDENT
             - name: JAVA_OPTS
               value: "-XX:MaxRAMPercentage=75 -Djava.security.egd=file:/dev/./urandom"
           volumeMounts:
-            - name: vol2
-              mountPath: /var/data/teacher
+            - name: vol1
+              mountPath: /var/data/student
           readinessProbe:
-            httpGet: { path: /actuator/health/readiness, port: 5001 }
+            httpGet: { path: /actuator/health/readiness, port: 5000 }
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 3
           livenessProbe:
-            httpGet: { path: /actuator/health/liveness, port: 5001 }
+            httpGet: { path: /actuator/health/liveness, port: 5000 }
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 3
@@ -58,18 +57,5 @@ spec:
             requests: { cpu: 100m, memory: 256Mi }
             limits:   { cpu: 1000m, memory: 768Mi }
       volumes:
-        - name: vol2
+        - name: vol1
           emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: teacher
-  namespace: msp
-spec:
-  selector:
-    app: teacher-service
-  ports:
-    - name: http
-      port: 5001
-      targetPort: 5001

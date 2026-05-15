@@ -1,23 +1,20 @@
 ---
-# Pinned to EC2-2 (label role=student). Mounts Vol1 for emptyDir-backed
-# scratch space so the diagram's "Vol 1" is wired up; persistent state still
-# lives in MongoDB.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: student-service
+  name: teacher-service
   namespace: msp
   labels:
-    app: student-service
+    app: teacher-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: student-service
+      app: teacher-service
   template:
     metadata:
       labels:
-        app: student-service
+        app: teacher-service
     spec:
       affinity:
         nodeAffinity:
@@ -26,33 +23,33 @@ spec:
               - matchExpressions:
                   - key: role
                     operator: In
-                    values: [student]
+                    values: [teacher]
       containers:
-        - name: student
-          image: DOCKERHUB_USER/ms-student:1.0
+        - name: teacher
+          image: DOCKERHUB_USER/ms-teacher:1.0
           imagePullPolicy: Always
           ports:
-            - containerPort: 5000
+            - containerPort: 5001
           env:
             - name: PORT
-              value: "5000"
+              value: "5001"
             - name: MONGO_URI
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
-                  key: MONGO_URI_STUDENT
+                  key: MONGO_URI_TEACHER
             - name: JAVA_OPTS
               value: "-XX:MaxRAMPercentage=75 -Djava.security.egd=file:/dev/./urandom"
           volumeMounts:
-            - name: vol1
-              mountPath: /var/data/student
+            - name: vol2
+              mountPath: /var/data/teacher
           readinessProbe:
-            httpGet: { path: /actuator/health/readiness, port: 5000 }
+            httpGet: { path: /actuator/health/readiness, port: 5001 }
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 3
           livenessProbe:
-            httpGet: { path: /actuator/health/liveness, port: 5000 }
+            httpGet: { path: /actuator/health/liveness, port: 5001 }
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 3
@@ -60,18 +57,5 @@ spec:
             requests: { cpu: 100m, memory: 256Mi }
             limits:   { cpu: 1000m, memory: 768Mi }
       volumes:
-        - name: vol1
+        - name: vol2
           emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: student
-  namespace: msp
-spec:
-  selector:
-    app: student-service
-  ports:
-    - name: http
-      port: 5000
-      targetPort: 5000

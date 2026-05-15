@@ -100,10 +100,13 @@ screenshot checkpoints. Below is the seven-step path from zero to a running
 cluster:
 
 ```bash
-# 1. Bootstrap every node (containerd + kubeadm + kubelet)
-ssh ubuntu@ec2-1 'sudo bash infra/scripts/bootstrap-ec2.sh'
-ssh ubuntu@ec2-2 'sudo bash infra/scripts/bootstrap-ec2.sh'
-ssh ubuntu@ec2-3 'sudo bash infra/scripts/bootstrap-ec2.sh'
+# 1. Bootstrap every node (containerd + Docker + kubeadm + kubelet)
+#    The script self-elevates with sudo, validates Ubuntu, and installs
+#    Kubernetes v1.30 by default. Re-login after it finishes so the
+#    docker group membership takes effect.
+scp infra/scripts/install-requirements.sh ubuntu@ec2-1:~ && ssh ubuntu@ec2-1 'bash install-requirements.sh'
+scp infra/scripts/install-requirements.sh ubuntu@ec2-2:~ && ssh ubuntu@ec2-2 'bash install-requirements.sh'
+scp infra/scripts/install-requirements.sh ubuntu@ec2-3:~ && ssh ubuntu@ec2-3 'bash install-requirements.sh'
 
 # 2. Init the control plane on EC2-1, then run the printed `kubeadm join …`
 #    command on EC2-2 and EC2-3.

@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-K8S_VERSION="${K8S_VERSION:-1.36}"
+K8S_VERSION="${K8S_VERSION:-1.30}"
 NODE_NAME="${NODE_NAME:-}"
 DOCKER_USER="${DOCKER_USER:-ubuntu}"
 

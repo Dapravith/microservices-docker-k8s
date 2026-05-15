@@ -31,7 +31,13 @@ if [[ -f /etc/kubernetes/admin.conf ]]; then
 fi
 
 POD_CIDR="${POD_CIDR:-10.244.0.0/16}"
-CONTROL_PLANE_IP="${CONTROL_PLANE_IP:-$(ip route get 1.1.1.1 | awk '{print $7; exit}')}"
+CONTROL_PLANE_IP="${CONTROL_PLANE_IP:-$(ip route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}')}"
+
+if [[ -z "${CONTROL_PLANE_IP}" ]]; then
+  echo "ERROR: could not detect the node IP. Set CONTROL_PLANE_IP manually:"
+  echo "  CONTROL_PLANE_IP=<private-ip> bash infra/scripts/init-control-plane.sh"
+  exit 1
+fi
 
 echo "Using control-plane IP: ${CONTROL_PLANE_IP}"
 echo "Using pod CIDR: ${POD_CIDR}"
@@ -47,7 +53,7 @@ sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
 chmod 600 "$HOME/.kube/config"
 
 echo "Installing Flannel CNI..."
-kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 
 echo
 echo "Waiting for node status..."

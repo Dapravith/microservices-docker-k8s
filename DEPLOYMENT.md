@@ -23,7 +23,7 @@ End-to-end steps, in order. Each one links to the detailed section below.
 
 1. **§0 Prerequisites** — provision 3 EC2 instances, open security-group ports,
    install `kubectl` locally.
-2. **§1 Bootstrap nodes** — run `bootstrap-ec2.sh` on every EC2.
+2. **§1 Bootstrap nodes** — run `install-requirements.sh` on every EC2.
 3. **§2 Init cluster** — `kubeadm init` on EC2-1, then `kubeadm join` on EC2-2 / EC2-3.
 4. **§3 Label nodes + prep host path** — `mkdir /var/lib/mongo-data` on EC2-1
    and label nodes with `db=mongo`, `role=frontend|student|teacher`.
@@ -69,11 +69,28 @@ k8s/
 
 ## 1. Per-node bootstrap (run on **every** EC2)
 
+The `install-requirements.sh` script self-elevates with sudo, validates
+Ubuntu, installs containerd/Docker/kubeadm/kubelet/kubectl (Kubernetes
+v1.30 by default), and prints a verification summary at the end.
+
 ```bash
-scp infra/scripts/bootstrap-ec2.sh ubuntu@ec2-1:~
-ssh ubuntu@ec2-1 'sudo bash bootstrap-ec2.sh'
-# repeat for ec2-2, ec2-3
+scp infra/scripts/install-requirements.sh ubuntu@ec2-1:~
+ssh ubuntu@ec2-1 'bash install-requirements.sh'
+# repeat for ec2-2 and ec2-3
 ```
+
+Optional overrides:
+
+```bash
+# Pin a different Kubernetes minor version
+K8S_VERSION=1.31 ssh ubuntu@ec2-1 'K8S_VERSION=$K8S_VERSION bash install-requirements.sh'
+
+# Set the node hostname while you're at it (handy for kubeadm)
+NODE_NAME=ec2-1 ssh ubuntu@ec2-1 'NODE_NAME=$NODE_NAME bash install-requirements.sh'
+```
+
+After it finishes, **log out and SSH back in** so the new `docker`
+group membership takes effect.
 
 📷 **Screenshot 1 (requirement #1) — three EC2 instances**: AWS console
 → EC2 → Instances, filtered to *Running*. All three (ec2-1, ec2-2, ec2-3)

@@ -7,6 +7,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 K8S_DIR="${ROOT}/k8s"
 NAMESPACE="msp"
+DOCKERHUB_USER="${DOCKERHUB_USER:-dapravith99}"
 
 echo "Using repo root: ${ROOT}"
 echo "Using k8s dir:   ${K8S_DIR}"
@@ -109,18 +110,23 @@ if ! kubectl -n "${NAMESPACE}" rollout status statefulset/mongodb --timeout=120s
 fi
 # ==============================================================================
 
-echo "Applying application services..."
-kubectl apply -f "${K8S_DIR}/auth.yaml"
-kubectl apply -f "${K8S_DIR}/auth-service.yaml"
-kubectl apply -f "${K8S_DIR}/registration.yaml"
-kubectl apply -f "${K8S_DIR}/registration-service.yaml"
-kubectl apply -f "${K8S_DIR}/student.yaml"
-kubectl apply -f "${K8S_DIR}/student-service.yaml"
-kubectl apply -f "${K8S_DIR}/teacher.yaml"
-kubectl apply -f "${K8S_DIR}/teacher-service.yaml"
-kubectl apply -f "${K8S_DIR}/api-gateway.yaml"
-kubectl apply -f "${K8S_DIR}/api-gateway-service.yaml"
+echo "Applying application services (substituting DOCKERHUB_USER=${DOCKERHUB_USER})..."
+APP_MANIFESTS=(auth registration student teacher api-gateway)
+for svc in "${APP_MANIFESTS[@]}"; do
+  sed "s|DOCKERHUB_USER|${DOCKERHUB_USER}|g" "${K8S_DIR}/${svc}.yaml" | kubectl apply -f -
+  kubectl apply -f "${K8S_DIR}/${svc}-service.yaml"
+done
 echo
+
+# Single-node only: strip nodeAffinity so app pods can schedule on the lone node
+# (manifests pin role=frontend/student/teacher, which can't all be satisfied by one node)
+if [ "$NODE_COUNT" -eq 1 ]; then
+  echo "==> Single-node mode: removing nodeAffinity from app deployments so they can schedule..."
+  for deploy in authentication-service registration student-service teacher-service api-gateway; do
+    kubectl -n "${NAMESPACE}" patch deploy "$deploy" --type=json \
+      -p='[{"op":"remove","path":"/spec/template/spec/affinity"}]' 2>/dev/null || true
+  done
+fi
 
 echo "Waiting for deployments..."
 DEPLOYMENTS=("authentication-service" "registration" "student-service" "teacher-service" "api-gateway")

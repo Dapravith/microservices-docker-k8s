@@ -17,9 +17,15 @@ if ! command -v kubectl >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> 1. Self-Healing: Freeing up disk space to prevent DiskPressure..."
+echo "==> 1. Self-Healing: Deep cleaning disk space (Docker + Containerd + OS)..."
+# Clean Docker
 docker system prune -a --volumes -f >/dev/null 2>&1 || true
-echo "    Disk space cleared."
+# Clean Containerd (Kubernetes runtime)
+sudo crictl rmi --prune >/dev/null 2>&1 || true
+# Clean Ubuntu Apt cache and old system logs
+sudo apt-get clean >/dev/null 2>&1 || true
+sudo journalctl --vacuum-time=1h >/dev/null 2>&1 || true
+echo "    Disk space completely cleared."
 echo
 
 echo "Checking Kubernetes connection..."
@@ -36,10 +42,20 @@ NODE_COUNT=$(kubectl get nodes --no-headers | wc -l)
 if [ "$NODE_COUNT" -eq 1 ]; then
   echo "==> Notice: Only 1 node detected in the cluster."
   echo "==> Automatically configuring the control-plane to accept application pods..."
+
+  # Remove taints (Control plane restriction AND old disk-pressure panics)
   kubectl taint nodes --all node-role.kubernetes.io/control-plane- 2>/dev/null || true
+  kubectl taint nodes --all node.kubernetes.io/disk-pressure- 2>/dev/null || true
+
   NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+
+  # Apply general worker label
   kubectl label node "$NODE_NAME" node-role.kubernetes.io/worker=worker --overwrite 2>/dev/null || true
-  echo "==> Control-plane is now unlocked."
+
+  # CRITICAL FIX: Apply the specific label required by your mongodb.yaml
+  kubectl label node "$NODE_NAME" db=mongo --overwrite 2>/dev/null || true
+
+  echo "==> Control-plane unlocked and labeled with 'db=mongo'."
   echo
 fi
 
@@ -54,8 +70,8 @@ echo "    Old storage and pods purged."
 echo
 
 # Ensure common local storage directories exist (prevents hostPath mount errors)
-sudo mkdir -p /mnt/data/mongodb /data/db || true
-sudo chmod -R 777 /mnt/data/mongodb /data/db || true
+sudo mkdir -p /var/lib/mongo-data /data/db || true
+sudo chmod -R 777 /var/lib/mongo-data /data/db || true
 
 echo "Applying namespace and base resources..."
 kubectl apply -f "${K8S_DIR}/00-namespace.yaml"
@@ -75,11 +91,11 @@ if ! kubectl -n "${NAMESPACE}" rollout status statefulset/mongodb --timeout=120s
   echo "========================================================================"
   echo "❌ ERROR: MongoDB rollout failed or timed out. Gathering debug data..."
   echo "========================================================================"
+  echo "--- DISK SPACE CHECK ---"
+  df -h /
+  echo
   echo "--- POD STATUS ---"
   kubectl -n "${NAMESPACE}" get pods
-  echo
-  echo "--- STORAGE STATUS ---"
-  kubectl -n "${NAMESPACE}" get pvc
   echo
   echo "--- EXACT ERROR LOG ---"
   POD_NAME=$(kubectl -n "${NAMESPACE}" get pods -l app=mongodb -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || echo "")

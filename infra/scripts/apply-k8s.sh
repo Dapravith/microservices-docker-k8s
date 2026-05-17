@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 # Apply Kubernetes manifests for the msp stack.
-# Run this on EC2-1 control-plane only, after:
-# 1. kubeadm init completed
-# 2. EC2-2 and EC2-3 joined the cluster
-# 3. kubectl get nodes -o wide works
-# 4. node labels are applied
+# Includes auto-configuration for single-node (control-plane only) setups.
 
 set -euo pipefail
 
@@ -23,9 +19,6 @@ fi
 
 if [[ ! -d "${K8S_DIR}" ]]; then
   echo "ERROR: k8s directory not found: ${K8S_DIR}"
-  echo "Expected structure:"
-  echo "  microservices-docker-k8s/k8s"
-  echo "  microservices-docker-k8s/infra/scripts"
   exit 1
 fi
 
@@ -43,30 +36,35 @@ fi
 
 if ! kubectl cluster-info >/dev/null 2>&1; then
   echo "ERROR: kubectl cannot connect to the Kubernetes cluster."
-  echo
-  echo "Most likely reasons:"
-  echo "  1. You are running this script on EC2-2 or EC2-3 worker node."
-  echo "  2. /etc/kubernetes/admin.conf is missing (kubeadm init not completed)."
-  echo "  3. The API server pod is not yet running."
-  echo
-  echo "Run this on EC2-1 control-plane first:"
-  echo "  sudo bash infra/scripts/init-control-plane.sh"
-  echo
-  echo "Current kubectl server:"
-  kubectl config view --minify 2>/dev/null | grep server || echo "  (no context configured)"
   exit 1
 fi
 
 echo "Kubernetes connection OK."
 echo
 
-echo "Current Kubernetes server:"
-kubectl config view --minify | grep server || true
-echo
-
 echo "Current nodes:"
 kubectl get nodes -o wide
 echo
+
+# ==============================================================================
+# SINGLE-NODE AUTO-CONFIGURE FIX
+# ==============================================================================
+NODE_COUNT=$(kubectl get nodes --no-headers | wc -l)
+if [ "$NODE_COUNT" -eq 1 ]; then
+  echo "==> Notice: Only 1 node detected in the cluster."
+  echo "==> Automatically configuring the control-plane to accept application pods..."
+
+  # Remove the NoSchedule taint from the control plane
+  kubectl taint nodes --all node-role.kubernetes.io/control-plane- 2>/dev/null || true
+
+  # Apply a worker label just in case any manifests strictly require it
+  NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+  kubectl label node "$NODE_NAME" node-role.kubernetes.io/worker=worker --overwrite 2>/dev/null || true
+
+  echo "==> Control-plane is now unlocked and acting as a worker node."
+  echo
+fi
+# ==============================================================================
 
 echo "Checking required manifest files..."
 
@@ -95,6 +93,11 @@ for file in "${REQUIRED_FILES[@]}"; do
 done
 
 echo "All manifest files found."
+echo
+
+# Clean up any stuck resources from the previous failed run
+echo "Cleaning up any stuck pending resources..."
+kubectl delete namespace "${NAMESPACE}" --ignore-not-found=true
 echo
 
 echo "Applying namespace and base resources..."

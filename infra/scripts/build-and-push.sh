@@ -3,6 +3,18 @@
 # Usage: ./infra/scripts/build-and-push.sh
 set -euo pipefail
 
+# 1. Check if the user has Docker access. If not, add them and reload the script.
+if ! docker info >/dev/null 2>&1; then
+  echo "==> Permission denied to Docker daemon."
+  echo "==> Adding $USER to the docker group..."
+  sudo usermod -aG docker $USER
+
+  echo "==> Applying new group membership and resuming execution..."
+  # Re-execute this exact script ($0) with all arguments ($*) under the docker group
+  exec sg docker -c "$0 $*"
+fi
+
+# 2. Proceed with the normal variables and build steps
 DOCKERHUB_USER="${DOCKERHUB_USER:-dapravith99}"
 TAG="${TAG:-1.0}"
 

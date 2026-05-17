@@ -18,15 +18,43 @@ if ! command -v kubectl >/dev/null 2>&1; then
   exit 1
 fi
 
+echo "==> 0. Self-Healing: Extending root partition + filesystem (if EBS was resized)..."
+ROOT_SRC="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+ROOT_DEV="$(readlink -f "${ROOT_SRC:-/dev/root}" 2>/dev/null || echo "")"
+if [[ -n "$ROOT_DEV" && -b "$ROOT_DEV" ]]; then
+  PARENT_NAME="$(lsblk -n -o PKNAME "$ROOT_DEV" 2>/dev/null | head -n1 | tr -d ' ')"
+  PARTNUM="$(echo "$ROOT_DEV" | grep -oE '[0-9]+$' || true)"
+  if [[ -n "$PARENT_NAME" && -n "$PARTNUM" && -b "/dev/$PARENT_NAME" ]]; then
+    sudo growpart "/dev/$PARENT_NAME" "$PARTNUM" 2>/dev/null || true
+    sudo resize2fs "$ROOT_DEV" 2>/dev/null || true
+    df -h / | tail -n1 | awk '{print "    Root now: " $4 " free (" $5 " used) on " $6}'
+  else
+    echo "    Skipped: could not resolve parent disk for $ROOT_DEV."
+  fi
+else
+  echo "    Skipped: could not resolve root device (ROOT_SRC=${ROOT_SRC:-unset})."
+fi
+echo
+
 echo "==> 1. Self-Healing: Deep cleaning disk space (Docker + Containerd + OS)..."
-# Clean Docker
+df -h / | tail -n1 | awk '{print "    Before: " $4 " free (" $5 " used) on " $6}'
+# Container runtimes
 docker system prune -a --volumes -f >/dev/null 2>&1 || true
-# Clean Containerd (Kubernetes runtime)
 sudo crictl rmi --prune >/dev/null 2>&1 || true
-# Clean Ubuntu Apt cache and old system logs
+sudo crictl rmp -af >/dev/null 2>&1 || true
+# Logs (journal + rotated /var/log)
+sudo journalctl --vacuum-size=50M >/dev/null 2>&1 || true
+sudo find /var/log -type f \( -name "*.gz" -o -name "*.[0-9]" -o -name "*.old" \) -delete 2>/dev/null || true
+sudo find /var/log -type f -name "*.log" -size +10M -exec truncate -s 0 {} \; 2>/dev/null || true
+# APT + snap + tmp
 sudo apt-get clean >/dev/null 2>&1 || true
-sudo journalctl --vacuum-time=1h >/dev/null 2>&1 || true
-echo "    Disk space completely cleared."
+sudo apt-get autoremove -y --purge >/dev/null 2>&1 || true
+sudo rm -rf /var/cache/apt/archives/*.deb /tmp/* /var/tmp/* 2>/dev/null || true
+if command -v snap >/dev/null 2>&1; then
+  LANG=C snap list --all 2>/dev/null | awk '/disabled/{print $1, $3}' \
+    | while read -r s r; do sudo snap remove "$s" --revision="$r" >/dev/null 2>&1 || true; done
+fi
+df -h / | tail -n1 | awk '{print "    After:  " $4 " free (" $5 " used) on " $6}'
 echo
 
 echo "Checking Kubernetes connection..."
@@ -77,6 +105,24 @@ sudo chmod -R 777 /var/lib/mongo-data /data/db || true
 echo "Applying namespace and base resources..."
 kubectl apply -f "${K8S_DIR}/00-namespace.yaml"
 kubectl apply -f "${K8S_DIR}/01-secrets.yaml"
+echo
+
+# Wait for kubelet to clear the disk-pressure taint (it manages this one itself —
+# you can't just `kubectl taint -` it away; kubelet re-applies it until disk recovers)
+echo "==> Waiting for node to clear disk-pressure taint (90s max)..."
+for i in $(seq 1 18); do
+  PRESSURED=$(kubectl get nodes -o jsonpath='{range .items[*]}{.spec.taints[?(@.key=="node.kubernetes.io/disk-pressure")].key}{"\n"}{end}' | grep -c disk-pressure || true)
+  if [ "$PRESSURED" -eq 0 ]; then
+    echo "    Disk-pressure clear after $((i*5))s."
+    break
+  fi
+  if [ "$i" -eq 18 ]; then
+    echo "    WARNING: disk-pressure taint still present after 90s."
+    df -h /
+    echo "    The root volume is too small. Resize the EBS volume to >=20G and re-run."
+  fi
+  sleep 5
+done
 echo
 
 echo "Applying MongoDB..."

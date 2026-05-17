@@ -38,17 +38,17 @@ echo
 
 echo "==> 1. Self-Healing: Deep cleaning disk space (Docker + Containerd + OS)..."
 df -h / | tail -n1 | awk '{print "    Before: " $4 " free (" $5 " used) on " $6}'
-# Container runtimes
+# Container runtimes (NOTE: do NOT use `crictl rmp -af` here — it kills the
+# kube-apiserver/etcd/controller-manager/scheduler static pods)
 docker system prune -a --volumes -f >/dev/null 2>&1 || true
 sudo crictl rmi --prune >/dev/null 2>&1 || true
-sudo crictl rmp -af >/dev/null 2>&1 || true
 # Logs (journal + rotated /var/log)
 sudo journalctl --vacuum-size=50M >/dev/null 2>&1 || true
 sudo find /var/log -type f \( -name "*.gz" -o -name "*.[0-9]" -o -name "*.old" \) -delete 2>/dev/null || true
 sudo find /var/log -type f -name "*.log" -size +10M -exec truncate -s 0 {} \; 2>/dev/null || true
-# APT + snap + tmp
+# APT + tmp (NOTE: never use `apt-get autoremove --purge` here — it can wipe
+# /etc/kubernetes config when held packages have auto-installed dependencies)
 sudo apt-get clean >/dev/null 2>&1 || true
-sudo apt-get autoremove -y --purge >/dev/null 2>&1 || true
 sudo rm -rf /var/cache/apt/archives/*.deb /tmp/* /var/tmp/* 2>/dev/null || true
 if command -v snap >/dev/null 2>&1; then
   LANG=C snap list --all 2>/dev/null | awk '/disabled/{print $1, $3}' \
@@ -57,11 +57,19 @@ fi
 df -h / | tail -n1 | awk '{print "    After:  " $4 " free (" $5 " used) on " $6}'
 echo
 
-echo "Checking Kubernetes connection..."
-if ! kubectl cluster-info >/dev/null 2>&1; then
-  exit 1
-fi
-echo "Kubernetes connection OK."
+echo "Checking Kubernetes connection (retrying for up to 60s)..."
+for i in $(seq 1 12); do
+  if kubectl cluster-info >/dev/null 2>&1; then
+    echo "Kubernetes connection OK (after $((i*5))s)."
+    break
+  fi
+  if [ "$i" -eq 12 ]; then
+    echo "ERROR: kubectl cluster-info failing after 60s. Last error:"
+    kubectl cluster-info 2>&1 | head -5
+    exit 1
+  fi
+  sleep 5
+done
 echo
 
 # ==============================================================================

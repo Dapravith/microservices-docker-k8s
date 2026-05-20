@@ -8,7 +8,7 @@
   "variable": [
     {
       "key": "gateway",
-      "value": "http://localhost:30080"
+      "value": "http://localhost:8080"
     },
     {
       "key": "studentJwt",

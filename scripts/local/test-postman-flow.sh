@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GATEWAY="${GATEWAY:-http://localhost:30080}"
+GATEWAY="${GATEWAY:-http://127.0.0.1:8080}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT

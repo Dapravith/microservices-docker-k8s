@@ -83,9 +83,32 @@ GET  /student/submissions
 
 The gateway validates JWTs and injects `X-User-Email`, `X-User-Role`, and `X-User-Full-Name` headers into downstream requests.
 
+## Build & Run a Service
+
+Maven is bundled via the wrapper (`./mvnw`, Maven 3.9.9) — no host Maven needed.
+A wrapper exists at the repo root and inside each `services/*` folder.
+
+```bash
+# Build every module from the repo root
+./mvnw -DskipTests install
+
+# Build a single service
+cd services/student-service && ./mvnw -DskipTests install
+
+# Run a single service locally
+cd services/student-service && ./mvnw spring-boot:run
+```
+
+Service ports: `api-gateway` 8080, `login-service` 8081, `student-service` 8082,
+`teacher-service` 8083. Health check: `GET /actuator/health`.
+
+Container/Kubernetes deploys go through `./scripts/local/deploy.sh`; each
+service's Dockerfile builds with `./mvnw` so the same pinned Maven version is
+used everywhere.
+
 ## Local Kubernetes Quickstart
 
-Requirements: Docker, `kind`, `kubectl`, Maven, Java 21+.
+Requirements: Docker, `kind`, `kubectl`, Java 21+ (Maven is bundled via `./mvnw`).
 
 ```bash
 ./scripts/local/deploy.sh

@@ -15,7 +15,7 @@ kubectl config use-context "kind-$CLUSTER_NAME" >/dev/null
 kubectl label node "$CLUSTER_NAME-control-plane" role=admin --overwrite
 kubectl label node "$CLUSTER_NAME-worker" role=student --overwrite
 kubectl label node "$CLUSTER_NAME-worker2" role=teacher --overwrite
-kubectl taint nodes "$CLUSTER_NAME-control-plane" node-role.kubernetes.io/control-plane- || true
+kubectl taint nodes "$CLUSTER_NAME-control-plane" node-role.kubernetes.io/control-plane- 2>/dev/null || true
 
 echo
 kubectl get nodes --show-labels

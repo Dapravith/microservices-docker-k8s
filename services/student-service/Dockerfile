@@ -1,13 +1,15 @@
-FROM maven:3.9.9-eclipse-temurin-21 AS build
+FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
+COPY .mvn/ .mvn/
+COPY mvnw .
 COPY pom.xml .
 COPY services/api-gateway/pom.xml services/api-gateway/pom.xml
 COPY services/login-service/pom.xml services/login-service/pom.xml
 COPY services/student-service/pom.xml services/student-service/pom.xml
 COPY services/teacher-service/pom.xml services/teacher-service/pom.xml
-RUN mvn -B -q -pl services/student-service -am dependency:go-offline
+RUN ./mvnw -B -q -pl services/student-service -am dependency:go-offline
 COPY services/student-service/src services/student-service/src
-RUN mvn -B -q -pl services/student-service -am -DskipTests package
+RUN ./mvnw -B -q -pl services/student-service -am -DskipTests package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app

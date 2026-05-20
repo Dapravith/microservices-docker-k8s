@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Run ONCE on EC2-1 control-plane after EC2-2 and EC2-3 joined the cluster.
-# Labels each Kubernetes node so pods can be pinned to the correct EC2 instance.
-
+# Run on the control plane after both workers have joined.
+# Labels each node so the Deployments land on the correct EC2.
 set -euo pipefail
 
-EC2_1="${EC2_1:?set EC2_1 to the kubectl-visible control-plane node name}"
-EC2_2="${EC2_2:?set EC2_2 to the kubectl-visible student worker node name}"
-EC2_3="${EC2_3:?set EC2_3 to the kubectl-visible teacher worker node name}"
+EC2_1="${EC2_1:-}"
+EC2_2="${EC2_2:-}"
+EC2_3="${EC2_3:-}"
 
-echo "Applying labels..."
-kubectl label --overwrite node "$EC2_1" role=frontend db=mongo
-kubectl label --overwrite node "$EC2_2" role=student
-kubectl label --overwrite node "$EC2_3" role=teacher
+if [[ -z "$EC2_1" || -z "$EC2_2" || -z "$EC2_3" ]]; then
+  echo "Usage: EC2_1=<node-name> EC2_2=<node-name> EC2_3=<node-name> $0"
+  echo "Available nodes:"
+  kubectl get nodes -o name
+  exit 1
+fi
 
-echo "Removing control-plane taints for lab workload scheduling..."
-kubectl taint node "$EC2_1" node-role.kubernetes.io/control-plane- 2>/dev/null || true
-kubectl taint node "$EC2_1" node-role.kubernetes.io/master- 2>/dev/null || true
+# Allow scheduling on the control plane (single small cluster, 3 nodes)
+kubectl taint nodes "$EC2_1" node-role.kubernetes.io/control-plane- || true
 
-echo "Creating MongoDB hostPath directory on EC2-1..."
-sudo mkdir -p /var/lib/mongo-data
-sudo chmod 700 /var/lib/mongo-data
+kubectl label node "$EC2_1" role=frontend --overwrite
+kubectl label node "$EC2_2" role=student  --overwrite
+kubectl label node "$EC2_3" role=teacher  --overwrite
 
-echo "Labels applied:"
-kubectl get nodes -L role,db
+echo "==> Node labels:"
+kubectl get nodes --show-labels

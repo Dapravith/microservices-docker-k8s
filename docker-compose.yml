@@ -1,105 +1,73 @@
-# MongoDB Atlas is the database. Non-sensitive config lives in .env;
-# the password and JWT secret are mounted as Docker secrets (./secrets/*.properties),
-# read by Spring Boot via `spring.config.import` in each application.yml.
-# Result: secrets do NOT appear in `docker inspect` or any container env.
-#
-# All services share a single database (ms_k8s) — collections are distinct:
-#   users, assignments, teacher_assignments.
+version: "3.9"
 
-x-mongo-env: &mongo-env
-  MONGO_USER: ${MONGO_USER}
-  MONGO_HOST: ${MONGO_HOST}
-  MONGO_DB: ${MONGO_DB}
-  MONGO_OPTIONS: ${MONGO_OPTIONS}
-
-secrets:
-  mongo_credentials:
-    file: ./secrets/mongo.properties
-  jwt_credentials:
-    file: ./secrets/jwt.properties
+# Local single-host stack. Mirrors the production k8s topology but everything
+# runs on one machine. Use this to develop, test, and confirm the JWT flow
+# before pushing images and deploying to the AWS cluster.
 
 services:
-  registration:
-    build: ./Registration_Microservice
-    image: ms-registration:1.0
-    container_name: ms-registration
-    environment:
-      <<: *mongo-env
-      PORT: 5003
-    secrets:
-      - source: mongo_credentials
-        target: mongo.properties
-        mode: 0400
-    ports:
-      - "5003:5003"
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    restart: unless-stopped
+    ports: ["27017:27017"]
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  login:
-    build: ./Authentication_Microservice
-    image: ms-login:1.0
-    container_name: ms-login
-    environment:
-      <<: *mongo-env
-      PORT: 5002
-      JWT_ACCESS_EXPIRATION_SECONDS: ${JWT_ACCESS_EXPIRATION_SECONDS}
-      JWT_REFRESH_EXPIRATION_SECONDS: ${JWT_REFRESH_EXPIRATION_SECONDS}
-    secrets:
-      - source: mongo_credentials
-        target: mongo.properties
-        mode: 0400
-      - source: jwt_credentials
-        target: jwt.properties
-        mode: 0400
-    ports:
-      - "5002:5002"
-
-  student:
-    build: ./Student_Microservice
-    image: ms-student:1.0
-    container_name: ms-student
-    environment:
-      <<: *mongo-env
-      PORT: 5000
-    secrets:
-      - source: mongo_credentials
-        target: mongo.properties
-        mode: 0400
-    ports:
-      # Host 5000 is owned by macOS AirPlay Receiver, so map to 5010 instead.
-      # Container still listens on 5000; the gateway reaches it at student:5000.
-      - "5010:5000"
-
-  teacher:
-    build: ./Teacher_Microservice
-    image: ms-teacher:1.0
-    container_name: ms-teacher
-    environment:
-      <<: *mongo-env
-      PORT: 5001
-    secrets:
-      - source: mongo_credentials
-        target: mongo.properties
-        mode: 0400
-    ports:
-      - "5001:5001"
-
-  gateway:
-    build: ./APIGateway_Microservice
-    image: ms-gateway:1.0
-    container_name: ms-gateway
-    environment:
-      PORT: 4000
-      LOGIN_SERVICE_URL: http://login:5002
-      REGISTRATION_SERVICE_URL: http://registration:5003
-      STUDENT_SERVICE_URL: http://student:5000
-      TEACHER_SERVICE_URL: http://teacher:5001
-    secrets:
-      - source: jwt_credentials
-        target: jwt.properties
-        mode: 0400
-    ports:
-      - "4000:4000"
+  auth-service:
+    build: ./auth-service
+    image: aupp/auth-service:1.0.0
+    container_name: auth-service
+    restart: unless-stopped
     depends_on:
-      - login
-      - registration
-      - student
-      - teacher
+      mongodb: { condition: service_healthy }
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/auth_db
+      JWT_SECRET: ${JWT_SECRET:-change-me-please-use-a-very-long-random-secret-key-1234567890}
+      JWT_TTL_SECONDS: 3600
+    ports: ["8081:8081"]
+
+  student-service:
+    build: ./student-service
+    image: aupp/student-service:1.0.0
+    container_name: student-service
+    restart: unless-stopped
+    depends_on:
+      mongodb: { condition: service_healthy }
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/student_db
+    ports: ["8082:8082"]
+
+  teacher-service:
+    build: ./teacher-service
+    image: aupp/teacher-service:1.0.0
+    container_name: teacher-service
+    restart: unless-stopped
+    depends_on:
+      mongodb: { condition: service_healthy }
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/teacher_db
+    ports: ["8083:8083"]
+
+  api-gateway:
+    build: ./api-gateway
+    image: aupp/api-gateway:1.0.0
+    container_name: api-gateway
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+      - student-service
+      - teacher-service
+    environment:
+      AUTH_SERVICE_URI: http://auth-service:8081
+      STUDENT_SERVICE_URI: http://student-service:8082
+      TEACHER_SERVICE_URI: http://teacher-service:8083
+      JWT_SECRET: ${JWT_SECRET:-change-me-please-use-a-very-long-random-secret-key-1234567890}
+    ports: ["8080:8080"]
+
+volumes:
+  mongo_data:

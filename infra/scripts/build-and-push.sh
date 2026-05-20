@@ -1,45 +1,29 @@
 #!/usr/bin/env bash
-# Build all five service images and push them to a Docker registry.
-# Usage: ./infra/scripts/build-and-push.sh
+# Build all four service images and push them to a Docker registry.
+#
+#   REGISTRY=docker.io/yourdockerhubuser TAG=1.0.0 ./build-and-push.sh
+#
+# If you'd rather not use a registry, copy images to each EC2 with:
+#   docker save aupp/api-gateway:1.0.0 | ssh ec2-2 'sudo ctr -n=k8s.io images import -'
 set -euo pipefail
 
-# 1. Check if the user has Docker access. If not, add them and reload the script.
-if ! docker info >/dev/null 2>&1; then
-  echo "==> Permission denied to Docker daemon."
-  echo "==> Adding $USER to the docker group..."
-  sudo usermod -aG docker $USER
+REGISTRY="${REGISTRY:-aupp}"
+TAG="${TAG:-1.0.0}"
+SERVICES=(api-gateway auth-service student-service teacher-service)
 
-  echo "==> Applying new group membership and resuming execution..."
-  # Re-execute this exact script ($0) with all arguments ($*) under the docker group
-  exec sg docker -c "$0 $*"
-fi
+cd "$(dirname "$0")/../.."
 
-# 2. Proceed with the normal variables and build steps
-DOCKERHUB_USER="${DOCKERHUB_USER:-dapravith99}"
-TAG="${TAG:-1.0}"
-
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-
-build_push() {
-  local svc="$1"
-  local img="$2"
-  echo "==> building $svc"
-  docker build --platform=linux/amd64 -t "${DOCKERHUB_USER}/${img}:${TAG}" "${ROOT}/${svc}"
-  docker push "${DOCKERHUB_USER}/${img}:${TAG}"
-}
-
-build_push Registration_Microservice   ms-registration
-build_push Authentication_Microservice ms-login
-build_push Student_Microservice        ms-student
-build_push Teacher_Microservice        ms-teacher
-build_push APIGateway_Microservice     ms-gateway
-
-echo
-echo "All five images pushed:"
-for img in ms-registration ms-login ms-student ms-teacher ms-gateway; do
-  echo "  ${DOCKERHUB_USER}/${img}:${TAG}"
+for svc in "${SERVICES[@]}"; do
+  echo "==> Building $svc"
+  docker build -t "${REGISTRY}/${svc}:${TAG}" "./${svc}"
 done
 
-echo
-echo "Now substitute DOCKERHUB_USER in k8s/*.yaml — e.g.:"
-echo "  sed -i.bak \"s|DOCKERHUB_USER|${DOCKERHUB_USER}|g\" k8s/*.yaml"
+if [[ "${PUSH:-true}" == "true" && "${REGISTRY}" != "aupp" ]]; then
+  for svc in "${SERVICES[@]}"; do
+    echo "==> Pushing ${REGISTRY}/${svc}:${TAG}"
+    docker push "${REGISTRY}/${svc}:${TAG}"
+  done
+fi
+
+echo "==> Done. Images:"
+docker images | grep -E "(api-gateway|auth-service|student-service|teacher-service)" || true

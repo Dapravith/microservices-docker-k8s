@@ -1,279 +1,198 @@
-# Deployment guide — three AWS EC2 instances
+# AWS Deployment Runbook
 
-This walks through bringing up the cluster, deploying the five services,
-and capturing every screenshot the assignment asks for.
+Step-by-step guide to deploy the AUPP microservices project across **3 EC2
+instances** with a kubeadm Kubernetes cluster. Follow it top-to-bottom — every
+command is copy-pasteable and every screenshot the assignment asks for is
+called out as `SCREENSHOT N`.
 
-## Required screenshots (assignment deliverables)
+## 0. What you'll end up with
 
-| # | Requirement | Captured in step | Command(s) |
-| - | ----------- | ---------------- | ---------- |
-| 1 | **3 EC2 instances** running in AWS | §1 | AWS console → EC2 → Instances (filter: *Running*) |
-| 2 | **Docker image / container on each of the 3 EC2 instances** | §4 + §5 | `sudo crictl images` and `sudo crictl ps` on EC2-1, EC2-2, EC2-3 |
-| 3 | **3 Services and Deployments** across the 3 EC2 instances | §5 | `kubectl -n msp get deploy,svc -o wide` |
-| 4 | **Pods on each EC2 instance** | §5 | `kubectl -n msp get pods -o wide --field-selector spec.nodeName=<node>` for each of the 3 nodes |
+| EC2  | Role     | Node label        | Pods on it                            |
+| ---- | -------- | ----------------- | ------------------------------------- |
+| EC2-1 | control plane | `role=frontend` | `api-gateway`, `auth-service`, `mongodb` |
+| EC2-2 | worker        | `role=student`  | `student-service` + Vol1               |
+| EC2-3 | worker        | `role=teacher`  | `teacher-service` + Vol2               |
 
-> ⚠️ This cluster uses **containerd** (Kubernetes ≥ 1.24 dropped dockershim),
-> so `docker ps` on the nodes will **not** list pod containers. Use
-> `sudo crictl ps` / `sudo crictl images` instead — those talk to the
-> same runtime kubelet uses.
+A single NodePort service exposes the gateway on `:30080` of every EC2's
+public IP — Postman calls that.
 
-## Implementation guide at a glance
+## 1. Provision 3 EC2 instances
 
-End-to-end steps, in order. Each one links to the detailed section below.
+In the AWS console:
 
-1. **§0 Prerequisites** — provision 3 EC2 instances, open security-group ports,
-   install `kubectl` locally.
-2. **§1 Bootstrap nodes** — run `install-requirements.sh` on every EC2.
-3. **§2 Init cluster** — `kubeadm init` on EC2-1, then `kubeadm join` on EC2-2 / EC2-3.
-4. **§3 Label nodes + prep host path** — `mkdir /var/lib/mongo-data` on EC2-1
-   and label nodes with `db=mongo`, `role=frontend|student|teacher`.
-5. **§4 Build & push images** — `build-and-push.sh DOCKERHUB_USER=…`.
-6. **§5 Apply manifests** — substitute `DOCKERHUB_USER`, rotate the JWT
-   secret, then `apply-k8s.sh` applies the 14 files in the right order.
-7. **§6 Smoke-test** — run the Postman collection against the gateway NodePort.
-8. **§7 (optional) SonarQube scan** · **§8 Tear down**.
+1. **AMI:** Ubuntu Server 22.04 LTS (24.04 also works).
+2. **Type:** `t3.medium` (2 vCPU, 4 GB RAM) for all three. `t2.micro` is too
+   small for kubeadm + Spring Boot.
+3. **Storage:** 20 GB gp3 each.
+4. **Key pair:** one SSH key, used for all three nodes.
+5. **Security group** (one shared SG is easiest):
+   - 22/tcp from your laptop IP (SSH)
+   - 6443/tcp within the SG (control plane API)
+   - 10250/tcp within the SG (kubelet)
+   - 8285,8472/udp within the SG (Flannel VXLAN)
+   - 30000–32767/tcp from your laptop (NodePort range — opens 30080 too)
+6. **Tag:** Name them `aupp-ec2-1`, `aupp-ec2-2`, `aupp-ec2-3`.
 
-The k8s/ folder now follows a one-file-per-resource layout:
+➡️  **SCREENSHOT 1: AWS EC2 console showing 3 running instances.**
 
-```
-k8s/
-├── 00-namespace.yaml          # namespace + StorageClass
-├── 01-secrets.yaml            # JWT + Mongo URIs
-├── mongodb.yaml               # PV + PVC + StatefulSet
-├── mongodb-service.yaml       # headless Service
-├── auth.yaml                  # authentication-service Deployment
-├── auth-service.yaml
-├── registration.yaml
-├── registration-service.yaml
-├── student.yaml
-├── student-service.yaml
-├── teacher.yaml
-├── teacher-service.yaml
-├── api-gateway.yaml
-└── api-gateway-service.yaml   # NodePort 30000
-```
+## 2. Bootstrap every node
 
-## 0. Prerequisites
-
-* Three EC2 instances (Ubuntu 22.04+, t3.medium or larger, security group
-  allows inter-node 6443/tcp + 10250/tcp + flannel UDP 8472/udp + the
-  NodePort range 30000-32767 from your laptop's IP).
-* A Docker Hub (or any) registry username — used as the image prefix.
-* `kubectl` on your laptop, plus an SSH key that can reach all three EC2s.
-
-| Role  | Hostname (example) | Public IP        | Purpose                        |
-| ----- | ------------------ | ---------------- | ------------------------------ |
-| EC2-1 | `ec2-1`            | `54.x.x.1`       | control plane + gateway/login + mongo |
-| EC2-2 | `ec2-2`            | `54.x.x.2`       | student-service (Vol 1)        |
-| EC2-3 | `ec2-3`            | `54.x.x.3`       | teacher-service (Vol 2)        |
-
-## 1. Per-node bootstrap (run on **every** EC2)
-
-The `install-requirements.sh` script self-elevates with sudo, validates
-Ubuntu, installs containerd/Docker/kubeadm/kubelet/kubectl (Kubernetes
-v1.30 by default), and prints a verification summary at the end.
+SSH into each EC2 and run:
 
 ```bash
-scp infra/scripts/install-requirements.sh ubuntu@ec2-1:~
-ssh ubuntu@ec2-1 'bash install-requirements.sh'
-# repeat for ec2-2 and ec2-3
+git clone <your repo>            # or scp the project folder over
+cd microservices-docker-k8s
+sudo bash infra/scripts/bootstrap-ec2.sh
+# log out + log back in so the docker group sticks
 ```
 
-Optional overrides:
+That installs containerd, Docker (for building images), kubeadm/kubelet/kubectl
+v1.30, and configures kernel modules + sysctl.
+
+## 3. Initialize the control plane on EC2-1
 
 ```bash
-# Pin a different Kubernetes minor version
-K8S_VERSION=1.31 ssh ubuntu@ec2-1 'K8S_VERSION=$K8S_VERSION bash install-requirements.sh'
-
-# Set the node hostname while you're at it (handy for kubeadm)
-NODE_NAME=ec2-1 ssh ubuntu@ec2-1 'NODE_NAME=$NODE_NAME bash install-requirements.sh'
+sudo bash infra/scripts/init-control-plane.sh
 ```
 
-After it finishes, **log out and SSH back in** so the new `docker`
-group membership takes effect.
+The script prints a `kubeadm join …` command at the end. Copy it.
 
-📷 **Screenshot 1 (requirement #1) — three EC2 instances**: AWS console
-→ EC2 → Instances, filtered to *Running*. All three (ec2-1, ec2-2, ec2-3)
-must be visible in a single screenshot.
+## 4. Join EC2-2 and EC2-3 as workers
 
-## 2. Initialise the control plane (EC2-1 only)
+On **EC2-2** and **EC2-3**, paste the join command, e.g.:
 
 ```bash
-ssh ubuntu@ec2-1 'bash -s' < infra/scripts/init-control-plane.sh
+sudo kubeadm join <EC2-1-private-IP>:6443 --token <token> \
+     --discovery-token-ca-cert-hash sha256:<hash>
 ```
 
-The script ends by printing a `kubeadm join …` command. Run it on EC2-2
-and EC2-3:
+Back on EC2-1, confirm all three nodes are Ready:
 
 ```bash
-ssh ubuntu@ec2-2 'sudo kubeadm join …'
-ssh ubuntu@ec2-3 'sudo kubeadm join …'
+kubectl get nodes -o wide
 ```
 
-Verify:
+## 5. Label the nodes for pod placement
+
+On EC2-1:
 
 ```bash
-ssh ubuntu@ec2-1 'kubectl get nodes -o wide'
+# names from `kubectl get nodes -o name | sed 's|node/||'`
+EC2_1=aupp-ec2-1 EC2_2=aupp-ec2-2 EC2_3=aupp-ec2-3 \
+  bash infra/scripts/label-nodes.sh
 ```
 
-All three nodes should be `Ready`.
+The script also removes the control-plane taint on EC2-1 so pods can land on
+it.
 
-## 3. Pin pods to the right node
+## 6. Build the images
 
-Pre-create the MongoDB host directory on EC2-1 (the PV uses `hostPath`):
+You have two options.
+
+**Option A — push to Docker Hub** (recommended; works on any node):
 
 ```bash
-ssh ubuntu@ec2-1 'sudo mkdir -p /var/lib/mongo-data && sudo chmod 700 /var/lib/mongo-data'
+docker login
+REGISTRY=docker.io/<your-dockerhub-user> TAG=1.0.0 \
+  bash infra/scripts/build-and-push.sh
 ```
 
-Find the kubectl-visible names and label them:
+Then deploy with the same prefix:
 
 ```bash
-ssh ubuntu@ec2-1 'kubectl get nodes -o name'
-# Output looks like  node/ip-10-0-0-1, node/ip-10-0-0-2, node/ip-10-0-0-3
-
-EC2_1=ip-10-0-0-1 \
-EC2_2=ip-10-0-0-2 \
-EC2_3=ip-10-0-0-3 \
-ssh ubuntu@ec2-1 'bash -s' < infra/scripts/label-nodes.sh
+IMAGE_REPO=docker.io/<your-dockerhub-user> \
+  bash infra/scripts/apply-k8s.sh
 ```
 
-## 4. Build and push images
-
-From your laptop or build host:
+**Option B — build locally on each node** (no registry):
 
 ```bash
-DOCKERHUB_USER=youruser bash infra/scripts/build-and-push.sh
+# Run on each EC2:
+cd microservices-docker-k8s
+docker build -t aupp/api-gateway:1.0.0      ./api-gateway
+docker build -t aupp/auth-service:1.0.0     ./auth-service
+docker build -t aupp/student-service:1.0.0  ./student-service
+docker build -t aupp/teacher-service:1.0.0  ./teacher-service
+
+# Make containerd see them (k8s talks to containerd, not Docker):
+for img in aupp/api-gateway:1.0.0 aupp/auth-service:1.0.0 \
+           aupp/student-service:1.0.0 aupp/teacher-service:1.0.0; do
+  docker save "$img" | sudo ctr -n=k8s.io images import -
+done
 ```
 
-📷 **Screenshot 2 (requirement #2) — image + container on each EC2**.
-After the cluster has scheduled the pods, SSH into each node and capture
-both commands:
+➡️  **SCREENSHOT 2: `docker images` on each of the 3 EC2 instances**, showing
+the four service images.
+
+## 7. Rotate the JWT secret
+
+Open `k8s/01-secrets.yaml` and replace the `JWT_SECRET` placeholder with a
+fresh value:
 
 ```bash
-ssh ubuntu@ec2-1 'sudo crictl images && echo "---" && sudo crictl ps'
-ssh ubuntu@ec2-2 'sudo crictl images && echo "---" && sudo crictl ps'
-ssh ubuntu@ec2-3 'sudo crictl images && echo "---" && sudo crictl ps'
+openssl rand -base64 64 | tr -d '\n'
 ```
 
-Expected per node:
-* **ec2-1**: api-gateway, registration, authentication-service, mongodb
-* **ec2-2**: student-service
-* **ec2-3**: teacher-service
+## 8. Deploy everything to the cluster
 
-(`docker ps` will be empty on the nodes — kubelet uses containerd, not
-Docker. Use `crictl`.)
-
-## 5. Apply the manifests
-
-On EC2-1 (or wherever your kubectl points at the cluster):
+On EC2-1:
 
 ```bash
-sed -i.bak "s|DOCKERHUB_USER|youruser|g" k8s/*.yaml
-sed -i.bak "s|REPLACE_WITH_AT_LEAST_32_CHARACTERS_OF_RANDOM_BYTES|$(openssl rand -hex 32)|" k8s/01-secrets.yaml
-
 bash infra/scripts/apply-k8s.sh
 ```
 
-Validate:
+The script applies manifests in order, waits for each rollout, and prints the
+final state.
+
+➡️  **SCREENSHOT 3: `kubectl -n aupp get deploy,svc -o wide`** (services and
+deployments across the 3 EC2 instances).
+
+➡️  **SCREENSHOT 4: `kubectl -n aupp get pods -o wide`** showing one pod per
+node (api-gateway+auth+mongodb on EC2-1, student on EC2-2, teacher on EC2-3).
+
+## 9. Seed users and test from Postman
+
+Get any EC2 public IP — call it `$GW`.
+
+In Postman, import `postman/microservices-k8s.postman_collection.json` and set
+the collection variable `gateway` to `http://$GW:30080`. Then run:
+
+| Step | Request                                  | Expected            | Screenshot |
+| ---- | ---------------------------------------- | ------------------- | ---------- |
+| a    | `POST /auth/register` (student)          | `201 Created`       |            |
+| b    | `POST /auth/register` (teacher)          | `201 Created`       |            |
+| c    | `POST /auth/login` (student)             | `200` + JWT         | **SCREENSHOT 5** |
+| d    | `POST /auth/login` (teacher)             | `200` + JWT         |            |
+| e    | `GET /student/me` with **student** JWT   | `200`               | **SCREENSHOT 6** |
+| f    | `GET /teacher/me` with **teacher** JWT   | `200`               | **SCREENSHOT 7** |
+| g    | `GET /student/me` with **teacher** JWT   | `403 Forbidden`     | **SCREENSHOT 8** |
+| h    | `GET /teacher/me` with **student** JWT   | `403 Forbidden`     | **SCREENSHOT 9** |
+
+The Postman collection automatically captures each JWT into the
+`studentJwt` / `teacherJwt` collection variables.
+
+To exercise real DB writes (the spec says "should have some database
+activity"), run `POST /student` (with student JWT) and `POST /teacher`
+(with teacher JWT) — both create a record.
+
+## 10. Tear-down
 
 ```bash
-kubectl -n msp get deploy,svc,statefulset
-kubectl -n msp get pods -o wide
-```
-
-📷 **Screenshot 3 (requirement #3) — Services and Deployments**: a
-single screenshot showing the output of
-`kubectl -n msp get deploy,svc -o wide`. The `NODE` column (visible with
-`-o wide`) is what proves the workloads are spread across the 3 EC2
-instances.
-
-📷 **Screenshot 4 (requirement #4) — Pods on each EC2**. First list the
-nodes so you have their exact kubectl-visible names:
-
-```bash
-kubectl get nodes -o name
-# e.g. node/ip-10-0-0-1, node/ip-10-0-0-2, node/ip-10-0-0-3
-```
-
-Then take one screenshot per node (substitute the real node names):
-
-```bash
-kubectl -n msp get pods -o wide --field-selector spec.nodeName=ip-10-0-0-1
-kubectl -n msp get pods -o wide --field-selector spec.nodeName=ip-10-0-0-2
-kubectl -n msp get pods -o wide --field-selector spec.nodeName=ip-10-0-0-3
-```
-
-Expected pods per node:
-* **ec2-1** (`role=frontend, db=mongo`): api-gateway, registration,
-  authentication-service, mongodb-0
-* **ec2-2** (`role=student`): student-service
-* **ec2-3** (`role=teacher`): teacher-service
-
-## 6. Smoke-test from Postman
-
-Set the `gatewayUrl` collection variable to `http://<EC2-1 public IP>:30000`
-and run the requests in order:
-
-| # | Request                                       | Expected         | Screenshot                  |
-| - | --------------------------------------------- | ---------------- | --------------------------- |
-| 1 | `POST /register/student` (alice)              | 201 + UserResp   | New                         |
-| 2 | `POST /register/teacher` (ms.smith)           | 201 + UserResp   | New                         |
-| 3 | `POST /login` (student)                       | 200 + token      | 5. Login → JWT token        |
-| 4 | `POST /login` (teacher)                       | 200 + token      | (same shape)                |
-| 5 | `POST /student/submitassignment` w/ student   | 201 + Mongo doc  | 6. /student with student JWT |
-| 6 | `POST /teacher/addassignment` w/ teacher      | 201 + Mongo doc  | 7. /teacher with teacher JWT |
-| 7 | `GET /student/viewassignment` w/ teacher      | **403**          | 8. /student with teacher JWT |
-| 8 | `GET /teacher/searchstudent` w/ student       | **403**          | 9. /teacher with student JWT |
-
-Database activity — confirm with mongosh:
-
-```bash
-kubectl -n msp exec -it statefulset/mongodb -- mongosh --quiet --eval '
-  printjson(db.getSiblingDB("auth_db").users.countDocuments({}));
-  printjson(db.getSiblingDB("student_db").assignments.find().toArray());
-  printjson(db.getSiblingDB("teacher_db").teacher_assignments.find().toArray());
-'
-```
-
-## 7. Code quality with SonarQube (optional but recommended)
-
-Run a SonarQube scan against any branch before pushing:
-
-```bash
-docker-compose -f docker-compose.sonar.yml up -d        # http://localhost:9000
-# admin/admin on first login, then: Account → Security → Generate Token
-export SONAR_TOKEN=<token>
-./infra/scripts/sonar-scan.sh
-```
-
-You get five Sonar projects (`microservices-k8s-registration`,
-`-login`, `-student`, `-teacher`, `-gateway`), each with coverage,
-duplications, security hotspots, and code smells.
-
-Tear the local Sonar stack back down with:
-
-```bash
-docker-compose -f docker-compose.sonar.yml down
-```
-
-## 8. Tear down
-
-```bash
-kubectl delete ns msp
-# (delete the EC2 instances from the AWS console when done)
+kubectl delete namespace aupp     # wipes deployments, services, PVCs
+# then terminate the EC2 instances from the console
 ```
 
 ## Troubleshooting
 
-* **CrashLoopBackOff on a Spring service** — usually MongoDB isn't ready
-  yet. Check `kubectl -n msp logs statefulset/mongodb` and verify the PV
-  is Bound: `kubectl get pv,pvc -A`.
-* **403 on every request** — the JWT secret in `app-secrets` doesn't
-  match the one the auth pod is using. Re-apply `01-secrets.yaml` and
-  `kubectl -n msp rollout restart deploy/authentication-service deploy/api-gateway`.
-* **Pods scheduled on the wrong node** — the node labels were not
-  applied. Re-run `infra/scripts/label-nodes.sh`.
-* **`hostPath` PV not binding** — the directory `/var/lib/mongo-data`
-  doesn't exist on the labeled `db=mongo` node. Create it with
-  `sudo mkdir -p` and re-apply `mongodb.yaml`.
+- **Pods stuck `ImagePullBackOff`** → using Option B above; make sure you ran
+  `ctr -n=k8s.io images import` on **the right node** (the one with the
+  `nodeSelector` matching the pod).
+- **`auth-service` 500s on login** → JWT secret on gateway and auth service
+  don't match. They must both come from the same `JWT_SECRET` env var.
+- **Pods `Pending`** → `kubectl describe pod` to see if it's "no node with
+  matching role". Re-run `label-nodes.sh`.
+- **`kubectl get nodes` shows only one** → workers couldn't reach the API
+  server. Open `6443/tcp` in the security group **within the SG**, not just
+  from your laptop.
+- **Flannel pod CrashLoopBackOff** → swap is back on. Run
+  `sudo swapoff -a` on the affected node.

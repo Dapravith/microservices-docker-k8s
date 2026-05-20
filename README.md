@@ -1,204 +1,169 @@
-# Microservices Deployment — Docker · Kubernetes · Multi-EC2 (Spring Boot)
+# AUPP Microservices — Docker · Kubernetes · 3× EC2
 
-A five-service Spring Boot stack deployed across three AWS EC2 nodes via
-Kubernetes. Built for the AUPP "Design and Deployment of a Scalable
-Microservices-Based Task Management System" assignment.
+A four-service Spring Boot stack that demonstrates JWT login, role-based
+authorization at the API gateway, and per-domain MongoDB persistence —
+deployed across three AWS EC2 instances orchestrated by Kubernetes.
+
+> Assignment: *Design and Deployment of a Scalable Microservices-Based Task
+> Management System Using Docker and Kubernetes on AWS EC2.*
 
 ## Architecture
 
 ```
-                  ┌──────────── EC2-1 (role=frontend, db=mongo) ─────────────┐
-                  │                                                          │
-   Postman ───►   │   api-gateway (Spring Cloud Gateway, :4000)              │
-                  │      │                                                   │
-                  │      ├─► registration         (Spring Boot, :5003) ─┐   │
-                  │      ├─► authentication-service (Spring Boot, :5002) ┤   │
-                  │      │                                              ▼   │
-                  │      │                                          MongoDB  │
-                  └──────│──────────────────────────────────────────────│───┘
-                         │ /student                                     │
-                         ▼                                              │
-                  ┌──────────── EC2-2 (role=student) ────────────┐      │
-                  │   student-service (:5000) + Vol1 (emptyDir)  │──────┤
-                  └──────────────────────────────────────────────┘      │
-                         │ /teacher                                     │
-                         ▼                                              │
-                  ┌──────────── EC2-3 (role=teacher) ────────────┐      │
-                  │   teacher-service (:5001) + Vol2 (emptyDir)  │──────┘
-                  └──────────────────────────────────────────────┘
+                        EC2-1  (role=frontend)            EC2-2 (role=student)        EC2-3 (role=teacher)
+                        ┌────────────────────────────┐    ┌──────────────────────┐    ┌──────────────────────┐
+   Postman / curl ───►  │  api-gateway   :30080 NP   │    │  student-service     │    │  teacher-service     │
+   /auth/login          │  + JWT filter / RBAC       │    │       :8082          │    │       :8083          │
+                        │                            │    │                      │    │                      │
+                        │  auth-service  :8081       │    │   PVC Vol1 (1 GiB)   │    │   PVC Vol2 (1 GiB)   │
+                        │                            │    └──────────┬───────────┘    └──────────┬───────────┘
+                        │  mongodb       :27017      │               │                           │
+                        │  (PVC, auth_db)            │               │ student_db                │ teacher_db
+                        └─────────────┬──────────────┘               │                           │
+                                      └───────────────────────────────┴───────────────────────────┘
+                                                  ClusterIP DNS:  mongodb.aupp.svc.cluster.local
 ```
 
-The gateway authenticates every protected request and forwards
-`X-User-Email` / `X-User-Role` headers downstream — student/teacher
-services trust those headers and never re-validate the JWT, so they stay
-small and focused. Splitting registration into its own service keeps the
-login service single-purpose: it never writes to the users collection.
+| Service           | Port | Pinned to   | Responsibility |
+| ----------------- | ---- | ----------- | -------------- |
+| `api-gateway`     | 8080 (NodePort 30080) | EC2-1 (`role=frontend`) | Edge routing + JWT validation + role enforcement |
+| `auth-service`    | 8081 | EC2-1 (`role=frontend`) | `/auth/register`, `/auth/login` (issues JWTs)    |
+| `student-service` | 8082 | EC2-2 (`role=student`)  | `/student/**` — only callable with `STUDENT` JWT |
+| `teacher-service` | 8083 | EC2-3 (`role=teacher`)  | `/teacher/**` — only callable with `TEACHER` JWT |
+| `mongodb`         | 27017| EC2-1                   | Single Mongo instance, three databases           |
 
-| Service                  | Stack                      | Port | DB           | Pinned to | Responsibility |
-| ------------------------ | -------------------------- | ---- | ------------ | --------- | -------------- |
-| `api-gateway`            | Spring Cloud Gateway       | 4000 | —            | EC2-1     | Edge routing + JWT validation + role enforcement |
-| `registration`           | Spring Boot + Spring Sec   | 5003 | `auth_db`    | EC2-1     | **Sole writer** of users collection            |
-| `authentication-service` | Spring Boot + Spring Sec   | 5002 | `auth_db`    | EC2-1     | Read-only auth: validate creds → issue JWT     |
-| `student-service`        | Spring Boot                | 5000 | `student_db` | EC2-2     | Student assignment domain                       |
-| `teacher-service`        | Spring Boot                | 5001 | `teacher_db` | EC2-3     | Teacher assignment domain                       |
+The gateway is the **only** service that understands JWTs. After it validates a
+token it rewrites the request with `X-User-Email` / `X-User-Role` headers,
+which the downstream services trust. That keeps the domain services tiny.
 
 ## Repository layout
 
 ```
 .
-├── APIGateway_Microservice/      Spring Cloud Gateway (JWT validation + role filter)
-├── Registration_Microservice/    Creates users (sole writer of auth_db.users)
-├── Authentication_Microservice/  Authenticates users, issues JWT (sole reader for login)
-├── Student_Microservice/         Student assignment APIs
-├── Teacher_Microservice/         Teacher assignment APIs
-├── docker-compose.yml       Local stack (Mongo + 5 services)
-├── docker-compose.sonar.yml Local SonarQube + Postgres
-├── k8s/                     Manifests — one file per Deployment / Service
-│                            (auth.yaml + auth-service.yaml, etc.); applied
-│                            in dependency order by infra/scripts/apply-k8s.sh
-├── infra/scripts/           bootstrap-ec2, init-control-plane, label-nodes,
-│                            build-and-push, apply-k8s, test-all, sonar-scan
-└── postman/                 Postman collection (covers every assignment screenshot)
+├── api-gateway/        Spring Cloud Gateway — JWT validation + role filter
+├── auth-service/       Spring Boot — register + login, issues JWTs
+├── student-service/    Spring Boot — student CRUD (student_db)
+├── teacher-service/    Spring Boot — teacher CRUD (teacher_db)
+├── docker-compose.yml  Local single-host stack (Mongo + 4 services)
+├── k8s/
+│   ├── 00-namespace.yaml
+│   ├── 01-secrets.yaml          JWT + Mongo creds (rotate before deploy!)
+│   ├── 10-mongodb.yaml          PVC + Deployment + Service
+│   ├── 20-auth-service.yaml
+│   ├── 30-student-service.yaml  + PVC Vol1
+│   ├── 40-teacher-service.yaml  + PVC Vol2
+│   └── 50-api-gateway.yaml      NodePort 30080
+├── infra/scripts/      bootstrap-ec2, init-control-plane, label-nodes,
+│                       build-and-push, apply-k8s, seed-users, test-all
+├── postman/            Postman collection — covers all 9 demo cases
+├── docs/               Project report + architecture diagram
+├── DEPLOYMENT.md       AWS step-by-step runbook
+└── README.md           (this file)
 ```
 
-## Quickstart — local (docker-compose)
+## Quickstart — local docker-compose
 
 ```bash
-docker-compose up --build -d
-docker-compose logs -f gateway
+docker compose up --build      # builds & starts Mongo + 4 services
+bash infra/scripts/seed-users.sh
+bash infra/scripts/test-all.sh
 ```
 
-Register a student, log in, and exercise the API:
+Expected output of `test-all.sh`:
+
+```
+==> 1) /student/me with STUDENT JWT (expect 200)
+HTTP/1.1 200 OK
+{"service":"student-service","email":"student1@aupp.edu","role":"STUDENT"}
+
+==> 2) /teacher/me with TEACHER JWT (expect 200)
+HTTP/1.1 200 OK
+{"service":"teacher-service","email":"teacher1@aupp.edu","role":"TEACHER"}
+
+==> 3) /student/me with TEACHER JWT (expect 403)
+HTTP/1.1 403 Forbidden
+{"error":"Forbidden","message":"role 'TEACHER' is not permitted to access /student/me"}
+
+==> 4) /teacher/me with STUDENT JWT (expect 403)
+HTTP/1.1 403 Forbidden
+{"error":"Forbidden","message":"role 'STUDENT' is not permitted to access /teacher/me"}
+
+==> 5) /student/me with no JWT (expect 401)
+HTTP/1.1 401 Unauthorized
+{"error":"Unauthorized","message":"missing Bearer token"}
+```
+
+## Quickstart — AWS (3 × EC2 + Kubernetes)
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full runbook. The TL;DR:
 
 ```bash
-# 1. Register
-curl -s -X POST http://localhost:4000/register/student \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@itc.edu.kh","password":"secret123"}'
+# On all 3 EC2 nodes
+sudo bash infra/scripts/bootstrap-ec2.sh
 
-# 2. Login → grab token
-STUDENT=$(curl -s -X POST http://localhost:4000/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@itc.edu.kh","password":"secret123","role":"student"}' \
-  | jq -r .token)
+# On EC2-1 only
+sudo bash infra/scripts/init-control-plane.sh
+# (copy the kubeadm join command into EC2-2 and EC2-3)
 
-# 3. Submit an assignment (DB write)
-curl -s -X POST http://localhost:4000/student/submitassignment \
-  -H "Authorization: Bearer $STUDENT" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"HW1","content":"linear equations"}'
+EC2_1=aupp-ec2-1 EC2_2=aupp-ec2-2 EC2_3=aupp-ec2-3 \
+  bash infra/scripts/label-nodes.sh
 
-# 4. Negative case — /teacher with student JWT → 403
-curl -i -X GET http://localhost:4000/teacher/searchstudent \
-  -H "Authorization: Bearer $STUDENT"
+REGISTRY=docker.io/<you> TAG=1.0.0 bash infra/scripts/build-and-push.sh
+IMAGE_REPO=docker.io/<you>          bash infra/scripts/apply-k8s.sh
 ```
 
-## Quickstart — Kubernetes on three EC2s
-
-See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the full multi-EC2 walkthrough with
-screenshot checkpoints. Below is the seven-step path from zero to a running
-cluster:
-
-```bash
-# 1. Bootstrap every node (containerd + Docker + kubeadm + kubelet)
-#    The script self-elevates with sudo, validates Ubuntu, and installs
-#    Kubernetes v1.30 by default. Re-login after it finishes so the
-#    docker group membership takes effect.
-scp infra/scripts/install-requirements.sh ubuntu@ec2-1:~ && ssh ubuntu@ec2-1 'bash install-requirements.sh'
-scp infra/scripts/install-requirements.sh ubuntu@ec2-2:~ && ssh ubuntu@ec2-2 'bash install-requirements.sh'
-scp infra/scripts/install-requirements.sh ubuntu@ec2-3:~ && ssh ubuntu@ec2-3 'bash install-requirements.sh'
-
-# 2. Init the control plane on EC2-1, then run the printed `kubeadm join …`
-#    command on EC2-2 and EC2-3.
-ssh ubuntu@ec2-1 'bash -s' < infra/scripts/init-control-plane.sh
-
-# 3. Pre-create the Mongo hostPath dir + label the nodes
-ssh ubuntu@ec2-1 'sudo mkdir -p /var/lib/mongo-data && sudo chmod 700 /var/lib/mongo-data'
-EC2_1=ip-10-0-0-1 EC2_2=ip-10-0-0-2 EC2_3=ip-10-0-0-3 \
-  ssh ubuntu@ec2-1 'bash -s' < infra/scripts/label-nodes.sh
-
-# 4. Build and push the five service images
-DOCKERHUB_USER=youruser bash infra/scripts/build-and-push.sh
-
-# 5. Bake your Docker Hub user + a fresh JWT secret into the manifests
-sed -i.bak "s|DOCKERHUB_USER|youruser|g" k8s/*.yaml
-sed -i.bak "s|REPLACE_WITH_AT_LEAST_32_CHARACTERS_OF_RANDOM_BYTES|$(openssl rand -hex 32)|" k8s/01-secrets.yaml
-
-# 6. Apply the 14 manifests in dependency order
-bash infra/scripts/apply-k8s.sh
-
-# 7. Verify
-kubectl -n msp get deploy,svc,statefulset,pods -o wide
-```
-
-The gateway is exposed as a NodePort on `30000`, so requests land at
-`http://<EC2-1 public IP>:30000`.
-
-### `k8s/` layout
-
-```
-00-namespace.yaml          01-secrets.yaml
-mongodb.yaml               mongodb-service.yaml          # StatefulSet + headless Service
-auth.yaml                  auth-service.yaml             # authentication-service
-registration.yaml          registration-service.yaml
-student.yaml               student-service.yaml
-teacher.yaml               teacher-service.yaml
-api-gateway.yaml           api-gateway-service.yaml      # NodePort 30000
-```
+The gateway is then reachable at `http://<any-EC2-public-IP>:30080`.
 
 ## API surface
 
-| Method | Path                               | Caller    | Service              | Result |
-| ------ | ---------------------------------- | --------- | -------------------- | ------ |
-| POST   | `/register`                        | anyone    | registration-service | 201 + UserResponse · 409 if dup · 400 if invalid |
-| POST   | `/register/student`                | anyone    | registration-service | 201 + UserResponse (role auto-set)               |
-| POST   | `/register/teacher`                | anyone    | registration-service | 201 + UserResponse (role auto-set)               |
-| POST   | `/login`                           | anyone    | authentication-service | 200 + Bearer JWT · 401 on bad creds            |
-| POST   | `/student/submitassignment`        | student   | student-service      | 201 — persists assignment                        |
-| GET    | `/student/viewassignment`          | student   | student-service      | 200 — returns this student's assignments         |
-| PUT    | `/student/studentupdateprofile`    | student   | student-service      | 200 — patch latest assignment                    |
-| PUT    | `/student/studentresubmitassignment`| student  | student-service      | 200 — re-submit latest assignment                |
-| POST   | `/teacher/addassignment`           | teacher   | teacher-service      | 201 — persists teacher-owned assignment          |
-| GET    | `/teacher/searchstudent?title=…`   | teacher   | teacher-service      | 200 — search this teacher's assignments          |
-| DELETE | `/teacher/removeassignment/{id}`   | teacher   | teacher-service      | 200 — owner-scoped delete                        |
+### Auth (public)
 
-Every protected route returns:
-
-* **401** if no/invalid/expired Bearer token
-* **403** if the token's role doesn't match the route's required role
-
-```bash
-# All five services in one go:
-./infra/scripts/test-all.sh
-
-# Or individually:
-( cd Registration_Microservice    && mvn -B clean verify )
-( cd Authentication_Microservice  && mvn -B clean verify )
-( cd Student_Microservice         && mvn -B clean verify )
-( cd Teacher_Microservice         && mvn -B clean verify )
-( cd APIGateway_Microservice      && mvn -B clean verify )
+```
+POST /auth/register     { email, password, role: "STUDENT"|"TEACHER", fullName }
+POST /auth/login        { email, password }   → { token, email, role, expiresInSeconds }
 ```
 
-After `mvn verify` each service's HTML report is at
-`<service>/target/site/jacoco/index.html`.
+### Student (requires `role=STUDENT`)
 
+```
+GET    /student/me        whoami test endpoint
+GET    /student           list students owned by the caller
+POST   /student           { name, major, year, gpa }
+GET    /student/{id}
+PUT    /student/{id}
+DELETE /student/{id}
+```
 
-## Configuration
+### Teacher (requires `role=TEACHER`)
 
-Every service reads config from environment variables (or `application.yml`
-defaults). The Kubernetes Secret `app-secrets` carries the production
-values; for local docker-compose they are inlined in `docker-compose.yml`.
+```
+GET    /teacher/me
+GET    /teacher
+POST   /teacher           { name, department, courses[], yearsOfExperience }
+GET    /teacher/{id}
+PUT    /teacher/{id}
+DELETE /teacher/{id}
+```
 
-| Variable                   | Used by                         | Notes                                  |
-| -------------------------- | ------------------------------- | -------------------------------------- |
-| `JWT_SECRET`               | login + gateway                 | must be ≥ 32 bytes, identical on both  |
-| `JWT_EXPIRATION_SECONDS`   | login                           | default 86400                          |
-| `MONGO_URI`                | login/registration/student/teacher | per-service Mongo connection string |
-| `LOGIN_SERVICE_URL`        | gateway                         | upstream URL for `/login`              |
-| `REGISTRATION_SERVICE_URL` | gateway                         | upstream URL for `/register/**`        |
-| `STUDENT_SERVICE_URL`      | gateway                         | upstream URL for `/student/**`         |
-| `TEACHER_SERVICE_URL`      | gateway                         | upstream URL for `/teacher/**`         |
+The gateway returns:
+- `401 Unauthorized` when no Bearer token is supplied to a protected route
+- `403 Forbidden` when the JWT's `role` claim doesn't match the path
+
+## Configuration reference
+
+| Variable               | Default                                  | Used by         |
+| ---------------------- | ---------------------------------------- | --------------- |
+| `MONGO_URI`            | `mongodb://mongodb:27017/<service_db>`   | all services    |
+| `JWT_SECRET`           | dev placeholder                          | gateway + auth  |
+| `JWT_TTL_SECONDS`      | `3600`                                   | auth-service    |
+| `AUTH_SERVICE_URI`     | `http://auth-service:8081`               | gateway         |
+| `STUDENT_SERVICE_URI`  | `http://student-service:8082`            | gateway         |
+| `TEACHER_SERVICE_URI`  | `http://teacher-service:8083`            | gateway         |
+
+`JWT_SECRET` **must be identical** between `api-gateway` and `auth-service` —
+the gateway uses it to verify signatures. In Kubernetes both pods read it
+from the `app-secrets` Secret.
 
 ## License
 
-This is course work — use however you'd like.
+Academic use — AUPP coursework.

@@ -1,0 +1,19 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: teacher-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/teacher_db}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

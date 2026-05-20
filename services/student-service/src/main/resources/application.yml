@@ -1,0 +1,22 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: student-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/student_db}
+
+teacher:
+  service-uri: ${TEACHER_SERVICE_URI:http://teacher-service:8083}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

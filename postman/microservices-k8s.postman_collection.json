@@ -1,204 +1,277 @@
 {
   "info": {
-    "name": "AUPP Microservices (Docker + K8s)",
-    "_postman_id": "8e9b6e3a-aupp-2026-mskap-collection-01",
-    "description": "End-to-end demo of JWT login + role-based authorization across the api-gateway. Set the collection variable `gateway` to your gateway URL (e.g. http://<EC2-public-IP>:30080 in AWS, or http://localhost:8080 locally).",
+    "name": "AUPP Local-First Kubernetes Microservices",
+    "_postman_id": "1f8a8b21-4051-42e1-b44d-cab5c23fbd0d",
+    "description": "JWT, role-based gateway, teacher tasks, student submissions, MongoDB activity, and forbidden cross-role checks.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "gateway",     "value": "http://localhost:8080" },
-    { "key": "studentJwt",  "value": "" },
-    { "key": "teacherJwt",  "value": "" }
+    {
+      "key": "gateway",
+      "value": "http://localhost:30080"
+    },
+    {
+      "key": "studentJwt",
+      "value": ""
+    },
+    {
+      "key": "teacherJwt",
+      "value": ""
+    },
+    {
+      "key": "taskId",
+      "value": ""
+    },
+    {
+      "key": "dueDate",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const due = new Date();",
+          "due.setDate(due.getDate() + 7);",
+          "pm.collectionVariables.set('dueDate', due.toISOString().slice(0, 10));"
+        ]
+      }
+    }
   ],
   "item": [
     {
-      "name": "1. Register student",
+      "name": "1. Register Student",
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "url": { "raw": "{{gateway}}/auth/register", "host": ["{{gateway}}"], "path": ["auth", "register"] },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"student1@aupp.edu\",\n  \"password\": \"Student#123\",\n  \"role\": \"STUDENT\",\n  \"fullName\": \"Sothea Student\"\n}"
-        }
+          "raw": "{\"email\":\"student1@aupp.edu\",\"password\":\"student123\",\"role\":\"STUDENT\",\"fullName\":\"Student One\"}"
+        },
+        "url": "{{gateway}}/auth/register"
       }
     },
     {
-      "name": "2. Register teacher",
+      "name": "2. Register Teacher",
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "url": { "raw": "{{gateway}}/auth/register", "host": ["{{gateway}}"], "path": ["auth", "register"] },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"teacher1@aupp.edu\",\n  \"password\": \"Teacher#123\",\n  \"role\": \"TEACHER\",\n  \"fullName\": \"Dara Teacher\"\n}"
-        }
+          "raw": "{\"email\":\"teacher1@aupp.edu\",\"password\":\"teacher123\",\"role\":\"TEACHER\",\"fullName\":\"Teacher One\"}"
+        },
+        "url": "{{gateway}}/auth/register"
       }
     },
     {
-      "name": "3. Login as student (saves studentJwt)",
+      "name": "3. Login Student - Save JWT",
       "event": [
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const json = pm.response.json();",
-              "pm.test('200 OK', () => pm.response.to.have.status(200));",
-              "pm.test('has token', () => pm.expect(json.token).to.be.a('string').and.have.length.greaterThan(20));",
-              "pm.collectionVariables.set('studentJwt', json.token);"
+              "pm.test('student login success', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('studentJwt', pm.response.json().token);"
             ]
           }
         }
       ],
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "url": { "raw": "{{gateway}}/auth/login", "host": ["{{gateway}}"], "path": ["auth", "login"] },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"student1@aupp.edu\",\n  \"password\": \"Student#123\"\n}"
-        }
+          "raw": "{\"email\":\"student1@aupp.edu\",\"password\":\"student123\"}"
+        },
+        "url": "{{gateway}}/auth/login"
       }
     },
     {
-      "name": "4. Login as teacher (saves teacherJwt)",
+      "name": "4. Login Teacher - Save JWT",
       "event": [
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const json = pm.response.json();",
-              "pm.test('200 OK', () => pm.response.to.have.status(200));",
-              "pm.test('has token', () => pm.expect(json.token).to.be.a('string').and.have.length.greaterThan(20));",
-              "pm.collectionVariables.set('teacherJwt', json.token);"
+              "pm.test('teacher login success', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('teacherJwt', pm.response.json().token);"
             ]
           }
         }
       ],
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "url": { "raw": "{{gateway}}/auth/login", "host": ["{{gateway}}"], "path": ["auth", "login"] },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"teacher1@aupp.edu\",\n  \"password\": \"Teacher#123\"\n}"
-        }
+          "raw": "{\"email\":\"teacher1@aupp.edu\",\"password\":\"teacher123\"}"
+        },
+        "url": "{{gateway}}/auth/login"
       }
     },
     {
-      "name": "5. GET /student/me with student JWT  (expect 200)",
+      "name": "5. Teacher Creates Task - MongoDB Write",
       "event": [
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
-            "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+            "exec": [
+              "pm.test('teacher creates task', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('taskId', pm.response.json().id);"
+            ]
           }
         }
       ],
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{studentJwt}}" }],
-        "url": { "raw": "{{gateway}}/student/me", "host": ["{{gateway}}"], "path": ["student", "me"] }
-      }
-    },
-    {
-      "name": "6. GET /teacher/me with teacher JWT  (expect 200)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{teacherJwt}}" }],
-        "url": { "raw": "{{gateway}}/teacher/me", "host": ["{{gateway}}"], "path": ["teacher", "me"] }
-      }
-    },
-    {
-      "name": "7. POST /student with student JWT (DB write)",
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{studentJwt}}" },
-          { "key": "Content-Type",  "value": "application/json" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherJwt}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
         ],
-        "url": { "raw": "{{gateway}}/student", "host": ["{{gateway}}"], "path": ["student"] },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"Sothea\",\n  \"major\": \"Computer Science\",\n  \"year\": 3,\n  \"gpa\": 3.7\n}"
-        }
+          "raw": "{\"title\":\"Kubernetes Local Deployment\",\"description\":\"Deploy all Spring Boot microservices into local Kubernetes and capture screenshots.\",\"course\":\"Cloud Computing\",\"dueDate\":\"{{dueDate}}\",\"maxScore\":100}"
+        },
+        "url": "{{gateway}}/teacher"
       }
     },
     {
-      "name": "8. POST /teacher with teacher JWT (DB write)",
+      "name": "6. Teacher Reads Tasks - MongoDB Read",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherJwt}}"
+          }
+        ],
+        "url": "{{gateway}}/teacher"
+      }
+    },
+    {
+      "name": "7. Student Reads Teacher Tasks",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentJwt}}"
+          }
+        ],
+        "url": "{{gateway}}/student/tasks"
+      }
+    },
+    {
+      "name": "8. Student Submits Task - MongoDB Write",
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{teacherJwt}}" },
-          { "key": "Content-Type",  "value": "application/json" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentJwt}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
         ],
-        "url": { "raw": "{{gateway}}/teacher", "host": ["{{gateway}}"], "path": ["teacher"] },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"Dr. Dara\",\n  \"department\": \"Computer Science\",\n  \"courses\": [\"Distributed Systems\", \"Cloud Computing\"],\n  \"yearsOfExperience\": 12\n}"
-        }
+          "raw": "{\"taskId\":\"{{taskId}}\",\"answer\":\"Local Kubernetes deployment is working with MongoDB and JWT authorization.\"}"
+        },
+        "url": "{{gateway}}/student"
       }
     },
     {
-      "name": "9. GET /student/me with TEACHER JWT  (expect 403)",
+      "name": "9. Student Reads Submissions - MongoDB Read",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentJwt}}"
+          }
+        ],
+        "url": "{{gateway}}/student"
+      }
+    },
+    {
+      "name": "10. Teacher JWT Cannot Access Student API",
       "event": [
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
-            "exec": ["pm.test('403 Forbidden', () => pm.response.to.have.status(403));"]
+            "exec": [
+              "pm.test('teacher blocked from student API', () => pm.response.to.have.status(403));"
+            ]
           }
         }
       ],
       "request": {
         "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{teacherJwt}}" }],
-        "url": { "raw": "{{gateway}}/student/me", "host": ["{{gateway}}"], "path": ["student", "me"] }
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherJwt}}"
+          }
+        ],
+        "url": "{{gateway}}/student"
       }
     },
     {
-      "name": "10. GET /teacher/me with STUDENT JWT  (expect 403)",
+      "name": "11. Student JWT Cannot Access Teacher API",
       "event": [
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
-            "exec": ["pm.test('403 Forbidden', () => pm.response.to.have.status(403));"]
+            "exec": [
+              "pm.test('student blocked from teacher API', () => pm.response.to.have.status(403));"
+            ]
           }
         }
       ],
       "request": {
         "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{studentJwt}}" }],
-        "url": { "raw": "{{gateway}}/teacher/me", "host": ["{{gateway}}"], "path": ["teacher", "me"] }
-      }
-    },
-    {
-      "name": "11. GET /student/me with NO JWT  (expect 401)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": ["pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"]
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentJwt}}"
           }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "url": { "raw": "{{gateway}}/student/me", "host": ["{{gateway}}"], "path": ["student", "me"] }
+        ],
+        "url": "{{gateway}}/teacher"
       }
     }
   ]

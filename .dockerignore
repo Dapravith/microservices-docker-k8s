@@ -2,8 +2,8 @@
 **/.idea/
 **/.git/
 **/*.iml
+.DS_Store
+.env
 archive/
-k8s/
-infra/
-postman/
 docs/
+postman/

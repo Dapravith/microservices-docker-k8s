@@ -1,0 +1,24 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: login-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/login_db}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-please-use-a-very-long-random-secret-key-1234567890}
+    ttl-seconds: ${JWT_TTL_SECONDS:3600}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

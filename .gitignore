@@ -7,6 +7,8 @@ target/
 *.war
 *.log
 .mvn/wrapper/maven-wrapper.jar
+# NOTE: .mvn/wrapper/maven-wrapper.properties is intentionally tracked
+# so ./mvnw works on a fresh clone and inside Docker builds.
 
 # IDE
 .idea/
@@ -17,18 +19,32 @@ target/
 .classpath
 .settings/
 
-# OS
+# OS / editor junk
 Thumbs.db
+*.swp
+*.swo
+*~
+*.bak
+*.orig
 
-# Local secrets
+# Local secrets / config
 .env
 .env.local
 *.local.yaml
+*.local.yml
+*.local.properties
+application-local.yml
+application-local.yaml
+application-local.properties
+*.pem
+*.key
+*.p12
+*.keystore
+credentials.json
 secrets/*.properties
 !secrets/*.properties.example
 
-# Editor/agent metadata
+# Editor / agent metadata
 .claude/
 .github/
-.vscode/
-.idea/
+.playwright-mcp/

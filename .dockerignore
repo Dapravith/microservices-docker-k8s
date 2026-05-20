@@ -1,0 +1,9 @@
+**/target/
+**/.idea/
+**/.git/
+**/*.iml
+archive/
+k8s/
+infra/
+postman/
+docs/

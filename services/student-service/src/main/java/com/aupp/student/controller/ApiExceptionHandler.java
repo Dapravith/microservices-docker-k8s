@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.aupp.student.exception.ForbiddenGatewayRoleException;
 import com.aupp.student.exception.MissingGatewayIdentityException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(MissingGatewayIdentityException.class)
     ResponseEntity<Map<String, Object>> handleMissingGatewayIdentity(MissingGatewayIdentityException ex) {
         return error(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(ForbiddenGatewayRoleException.class)
+    ResponseEntity<Map<String, Object>> handleForbiddenGatewayRole(ForbiddenGatewayRoleException ex) {
+        return error(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
     @ExceptionHandler(ResponseStatusException.class)

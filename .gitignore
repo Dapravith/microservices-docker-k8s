@@ -43,6 +43,8 @@ application-local.properties
 credentials.json
 secrets/*.properties
 !secrets/*.properties.example
+# Real k8s Secret with the Atlas connection string — copy from secret.example.yaml
+deploy/k8s/secret.yaml
 
 # Editor / agent metadata
 .claude/

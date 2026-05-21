@@ -78,19 +78,44 @@ echo "6) Student reads own MongoDB submissions through /student/submissions"
 curl -sS "$GATEWAY/student/submissions" -H "Authorization: Bearer $STUDENT_TOKEN"
 echo
 
-TEACHER_TO_STUDENT_CODE="$(status_request "$TMP_DIR/teacher-to-student.json" "$GATEWAY/student/submissions" -H "Authorization: Bearer $TEACHER_TOKEN")"
-STUDENT_TO_TEACHER_CODE="$(status_request "$TMP_DIR/student-to-teacher.json" "$GATEWAY/teacher/tasks" -H "Authorization: Bearer $STUDENT_TOKEN")"
+TEACHER_TO_STUDENT_ROOT_CODE="$(status_request "$TMP_DIR/teacher-to-student-root.json" "$GATEWAY/student" -H "Authorization: Bearer $TEACHER_TOKEN")"
+STUDENT_TO_TEACHER_ROOT_CODE="$(status_request "$TMP_DIR/student-to-teacher-root.json" "$GATEWAY/teacher" -H "Authorization: Bearer $STUDENT_TOKEN")"
+TEACHER_TO_STUDENT_TASKS_CODE="$(status_request "$TMP_DIR/teacher-to-student-tasks.json" "$GATEWAY/student/tasks" -H "Authorization: Bearer $TEACHER_TOKEN")"
+TEACHER_TO_STUDENT_SUBMISSIONS_CODE="$(status_request "$TMP_DIR/teacher-to-student-submissions.json" "$GATEWAY/student/submissions" -H "Authorization: Bearer $TEACHER_TOKEN")"
+STUDENT_TO_TEACHER_READ_CODE="$(status_request "$TMP_DIR/student-to-teacher-read.json" "$GATEWAY/teacher/tasks" -H "Authorization: Bearer $STUDENT_TOKEN")"
+STUDENT_TO_TEACHER_CREATE_CODE="$(status_request "$TMP_DIR/student-to-teacher-create.json" \
+  -X POST "$GATEWAY/teacher/tasks" \
+  -H "Authorization: Bearer $STUDENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"title\":\"Forbidden Task\",\"description\":\"Student role must not create teacher tasks.\",\"course\":\"Cloud Computing\",\"dueDate\":\"$DUE_DATE\",\"maxScore\":100}")"
 
 echo
-echo "7) Teacher JWT to /student/submissions returns $TEACHER_TO_STUDENT_CODE"
-cat "$TMP_DIR/teacher-to-student.json"
+echo "7) Teacher JWT to /student returns $TEACHER_TO_STUDENT_ROOT_CODE"
+cat "$TMP_DIR/teacher-to-student-root.json"
 echo
-echo "8) Student JWT to /teacher/tasks returns $STUDENT_TO_TEACHER_CODE"
-cat "$TMP_DIR/student-to-teacher.json"
+echo "8) Student JWT to /teacher returns $STUDENT_TO_TEACHER_ROOT_CODE"
+cat "$TMP_DIR/student-to-teacher-root.json"
+echo
+echo "9) Teacher JWT to /student/tasks returns $TEACHER_TO_STUDENT_TASKS_CODE"
+cat "$TMP_DIR/teacher-to-student-tasks.json"
+echo
+echo "10) Teacher JWT to /student/submissions returns $TEACHER_TO_STUDENT_SUBMISSIONS_CODE"
+cat "$TMP_DIR/teacher-to-student-submissions.json"
+echo
+echo "11) Student JWT to GET /teacher/tasks returns $STUDENT_TO_TEACHER_READ_CODE"
+cat "$TMP_DIR/student-to-teacher-read.json"
+echo
+echo "12) Student JWT to POST /teacher/tasks returns $STUDENT_TO_TEACHER_CREATE_CODE"
+cat "$TMP_DIR/student-to-teacher-create.json"
 echo
 
-if [[ "$TEACHER_TO_STUDENT_CODE" != "403" || "$STUDENT_TO_TEACHER_CODE" != "403" ]]; then
-  echo "Expected both cross-role checks to return 403" >&2
+if [[ "$TEACHER_TO_STUDENT_ROOT_CODE" != "403" \
+  || "$STUDENT_TO_TEACHER_ROOT_CODE" != "403" \
+  || "$TEACHER_TO_STUDENT_TASKS_CODE" != "403" \
+  || "$TEACHER_TO_STUDENT_SUBMISSIONS_CODE" != "403" \
+  || "$STUDENT_TO_TEACHER_READ_CODE" != "403" \
+  || "$STUDENT_TO_TEACHER_CREATE_CODE" != "403" ]]; then
+  echo "Expected all cross-role checks to return 403" >&2
   exit 1
 fi
 

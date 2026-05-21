@@ -24,7 +24,10 @@ spec:
             - containerPort: 8083
           env:
             - name: MONGO_URI
-              value: mongodb://mongodb:27017/teacher_db
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MONGO_URI
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

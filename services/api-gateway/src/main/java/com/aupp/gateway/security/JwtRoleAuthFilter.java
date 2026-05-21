@@ -44,11 +44,12 @@ public class JwtRoleAuthFilter implements GlobalFilter, Ordered {
         }
 
         String requiredRole = requiredRole(path);
-        if (requiredRole != null && !requiredRole.equalsIgnoreCase(user.role())) {
+        String userRole = user.role().trim();
+        if (requiredRole != null && !requiredRole.equalsIgnoreCase(userRole)) {
             return writeJsonError(
                     exchange,
                     HttpStatus.FORBIDDEN,
-                    "role '" + user.role() + "' is not permitted to access " + path
+                    "role '" + userRole + "' is not permitted to access " + path
             );
         }
 
@@ -59,7 +60,7 @@ public class JwtRoleAuthFilter implements GlobalFilter, Ordered {
                     headers.remove("X-User-Full-Name");
                 })
                 .header("X-User-Email", user.email())
-                .header("X-User-Role", user.role())
+                .header("X-User-Role", userRole)
                 .header("X-User-Full-Name", user.fullName())
                 .build();
 
@@ -72,10 +73,10 @@ public class JwtRoleAuthFilter implements GlobalFilter, Ordered {
     }
 
     String requiredRole(String path) {
-        if (path.startsWith("/student")) {
+        if (path.equals("/student") || path.startsWith("/student/")) {
             return "STUDENT";
         }
-        if (path.startsWith("/teacher")) {
+        if (path.equals("/teacher") || path.startsWith("/teacher/")) {
             return "TEACHER";
         }
         return null;

@@ -5,6 +5,7 @@ import java.util.Locale;
 
 import com.aupp.teacher.dto.TaskRequest;
 import com.aupp.teacher.dto.TaskResponse;
+import com.aupp.teacher.exception.ForbiddenGatewayRoleException;
 import com.aupp.teacher.exception.MissingGatewayIdentityException;
 import com.aupp.teacher.model.TeacherTask;
 import com.aupp.teacher.repository.TeacherTaskRepository;
@@ -21,9 +22,9 @@ public class TeacherTaskServiceImpl implements TeacherTaskService {
     }
 
     @Override
-    public TaskResponse createTask(String teacherEmail, TaskRequest request) {
+    public TaskResponse createTask(String teacherEmail, String role, TaskRequest request) {
         TeacherTask task = new TeacherTask(
-                requireTeacherEmail(teacherEmail),
+                requireTeacherContext(teacherEmail, role),
                 request.title().trim(),
                 request.description().trim(),
                 request.course().trim(),
@@ -34,8 +35,8 @@ public class TeacherTaskServiceImpl implements TeacherTaskService {
     }
 
     @Override
-    public List<TaskResponse> listTeacherTasks(String teacherEmail) {
-        return taskRepository.findByTeacherEmailOrderByCreatedAtDesc(requireTeacherEmail(teacherEmail))
+    public List<TaskResponse> listTeacherTasks(String teacherEmail, String role) {
+        return taskRepository.findByTeacherEmailOrderByCreatedAtDesc(requireTeacherContext(teacherEmail, role))
                 .stream()
                 .map(TaskResponse::from)
                 .toList();
@@ -49,10 +50,25 @@ public class TeacherTaskServiceImpl implements TeacherTaskService {
                 .toList();
     }
 
+    private String requireTeacherContext(String teacherEmail, String role) {
+        String normalizedEmail = requireTeacherEmail(teacherEmail);
+        requireTeacherRole(role);
+        return normalizedEmail;
+    }
+
     private String requireTeacherEmail(String teacherEmail) {
         if (teacherEmail == null || teacherEmail.isBlank()) {
             throw new MissingGatewayIdentityException();
         }
         return teacherEmail.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private void requireTeacherRole(String role) {
+        if (role == null || role.isBlank()) {
+            throw new MissingGatewayIdentityException();
+        }
+        if (!"TEACHER".equalsIgnoreCase(role.trim())) {
+            throw new ForbiddenGatewayRoleException("TEACHER", role);
+        }
     }
 }

@@ -6,9 +6,9 @@ import com.aupp.teacher.dto.TaskRequest;
 import com.aupp.teacher.dto.TaskResponse;
 
 public interface TeacherTaskService {
-    TaskResponse createTask(String teacherEmail, TaskRequest request);
+    TaskResponse createTask(String teacherEmail, String role, TaskRequest request);
 
-    List<TaskResponse> listTeacherTasks(String teacherEmail);
+    List<TaskResponse> listTeacherTasks(String teacherEmail, String role);
 
     List<TaskResponse> listTasksForStudents();
 }

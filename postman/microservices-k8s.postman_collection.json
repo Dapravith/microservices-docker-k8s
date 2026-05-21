@@ -234,7 +234,79 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('teacher blocked from student API', () => pm.response.to.have.status(403));"
+              "pm.test('teacher blocked from student API root', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherJwt}}"
+          }
+        ],
+        "url": "{{gateway}}/student"
+      }
+    },
+    {
+      "name": "11. Student JWT Cannot Access Teacher API",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('student blocked from teacher API root', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentJwt}}"
+          }
+        ],
+        "url": "{{gateway}}/teacher"
+      }
+    },
+    {
+      "name": "12. Teacher JWT Cannot Access Student Tasks",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('teacher blocked from student tasks', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherJwt}}"
+          }
+        ],
+        "url": "{{gateway}}/student/tasks"
+      }
+    },
+    {
+      "name": "13. Teacher JWT Cannot Access Student Submissions",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('teacher blocked from student submissions', () => pm.response.to.have.status(403));"
             ]
           }
         }
@@ -251,14 +323,14 @@
       }
     },
     {
-      "name": "11. Student JWT Cannot Access Teacher API",
+      "name": "14. Student JWT Cannot Read Teacher Tasks",
       "event": [
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('student blocked from teacher API', () => pm.response.to.have.status(403));"
+              "pm.test('student blocked from reading teacher tasks', () => pm.response.to.have.status(403));"
             ]
           }
         }
@@ -271,6 +343,38 @@
             "value": "Bearer {{studentJwt}}"
           }
         ],
+        "url": "{{gateway}}/teacher/tasks"
+      }
+    },
+    {
+      "name": "15. Student JWT Cannot Create Teacher Task",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('student blocked from creating teacher tasks', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentJwt}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\":\"Forbidden Task\",\"description\":\"Student role must not create teacher tasks.\",\"course\":\"Cloud Computing\",\"dueDate\":\"{{dueDate}}\",\"maxScore\":100}"
+        },
         "url": "{{gateway}}/teacher/tasks"
       }
     }

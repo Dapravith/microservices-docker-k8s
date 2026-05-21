@@ -7,9 +7,9 @@ import com.aupp.student.dto.SubmissionResponse;
 import com.aupp.student.dto.TeacherTaskView;
 
 public interface StudentTaskService {
-    List<TeacherTaskView> listTeacherTasks();
+    List<TeacherTaskView> listTeacherTasks(String studentEmail, String role);
 
-    SubmissionResponse submit(String studentEmail, SubmissionRequest request);
+    SubmissionResponse submit(String studentEmail, String role, SubmissionRequest request);
 
-    List<SubmissionResponse> listSubmissions(String studentEmail);
+    List<SubmissionResponse> listSubmissions(String studentEmail, String role);
 }

@@ -36,22 +36,27 @@ public class StudentTaskController {
     }
 
     @GetMapping("/tasks")
-    List<TeacherTaskView> listTasks() {
-        return studentTaskService.listTeacherTasks();
+    List<TeacherTaskView> listTasks(
+            @RequestHeader(value = "X-User-Email", defaultValue = "") String studentEmail,
+            @RequestHeader(value = "X-User-Role", defaultValue = "") String role
+    ) {
+        return studentTaskService.listTeacherTasks(studentEmail, role);
     }
 
     @PostMapping({"", "/submissions"})
     ResponseEntity<SubmissionResponse> submit(
             @RequestHeader(value = "X-User-Email", defaultValue = "") String studentEmail,
+            @RequestHeader(value = "X-User-Role", defaultValue = "") String role,
             @Valid @RequestBody SubmissionRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(studentTaskService.submit(studentEmail, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(studentTaskService.submit(studentEmail, role, request));
     }
 
     @GetMapping({"", "/submissions"})
     List<SubmissionResponse> listSubmissions(
-            @RequestHeader(value = "X-User-Email", defaultValue = "") String studentEmail
+            @RequestHeader(value = "X-User-Email", defaultValue = "") String studentEmail,
+            @RequestHeader(value = "X-User-Role", defaultValue = "") String role
     ) {
-        return studentTaskService.listSubmissions(studentEmail);
+        return studentTaskService.listSubmissions(studentEmail, role);
     }
 }

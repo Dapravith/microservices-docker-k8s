@@ -37,15 +37,17 @@ public class TeacherTaskController {
     @PostMapping({"", "/tasks"})
     ResponseEntity<TaskResponse> createTask(
             @RequestHeader(value = "X-User-Email", defaultValue = "") String teacherEmail,
+            @RequestHeader(value = "X-User-Role", defaultValue = "") String role,
             @Valid @RequestBody TaskRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(taskService.createTask(teacherEmail, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(taskService.createTask(teacherEmail, role, request));
     }
 
     @GetMapping({"", "/tasks"})
     List<TaskResponse> listTeacherTasks(
-            @RequestHeader(value = "X-User-Email", defaultValue = "") String teacherEmail
+            @RequestHeader(value = "X-User-Email", defaultValue = "") String teacherEmail,
+            @RequestHeader(value = "X-User-Role", defaultValue = "") String role
     ) {
-        return taskService.listTeacherTasks(teacherEmail);
+        return taskService.listTeacherTasks(teacherEmail, role);
     }
 }

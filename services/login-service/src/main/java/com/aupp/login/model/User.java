@@ -19,6 +19,7 @@ public class User {
     private Role role;
     private String fullName;
     private Instant createdAt = Instant.now();
+    private Instant updatedAt = Instant.now();
 
     public User() {
     }
@@ -28,6 +29,8 @@ public class User {
         this.passwordHash = passwordHash;
         this.role = role;
         this.fullName = fullName;
+        this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
     }
 
     public String getId() {

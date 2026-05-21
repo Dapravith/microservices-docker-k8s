@@ -31,11 +31,15 @@ Expected placement:
 | `aupp-local-worker` | `role=student` | `student-service` |
 | `aupp-local-worker2` | `role=teacher` | `teacher-service` |
 
-Use this gateway in Postman:
+Use one local gateway URL in Postman. The `api-gateway` is a NodePort and the
+`kind` cluster maps it to the host — no port-forward needed:
 
 ```text
 http://localhost:30080
 ```
+
+Do not point Postman directly at `login-service`, `student-service`, or
+`teacher-service`; all API testing should go through the gateway URL above.
 
 ## 2. EC2 Kubernetes
 
@@ -160,6 +164,7 @@ Import:
 
 ```text
 postman/microservices-k8s.postman_collection.json
+postman/task07-local.postman_environment.json
 ```
 
 Set collection variable:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GATEWAY="${GATEWAY:-http://127.0.0.1:8080}"
+GATEWAY="${GATEWAY:-http://localhost:30080}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -47,8 +47,8 @@ printf '%s\n' "$STUDENT_LOGIN"
 printf '%s\n' "$TEACHER_LOGIN"
 
 echo
-echo "2) Teacher creates task in MongoDB through /teacher"
-TASK_JSON="$(curl -sS -X POST "$GATEWAY/teacher" \
+echo "2) Teacher creates task in MongoDB through /teacher/tasks"
+TASK_JSON="$(curl -sS -X POST "$GATEWAY/teacher/tasks" \
   -H "Authorization: Bearer $TEACHER_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"title\":\"Kubernetes Local Deployment\",\"description\":\"Deploy all microservices into local Kubernetes and capture screenshots.\",\"course\":\"Cloud Computing\",\"dueDate\":\"$DUE_DATE\",\"maxScore\":100}")"
@@ -56,8 +56,8 @@ printf '%s\n' "$TASK_JSON"
 TASK_ID="$(printf '%s' "$TASK_JSON" | json_value id)"
 
 echo
-echo "3) Teacher reads own MongoDB tasks through /teacher"
-curl -sS "$GATEWAY/teacher" -H "Authorization: Bearer $TEACHER_TOKEN"
+echo "3) Teacher reads own MongoDB tasks through /teacher/tasks"
+curl -sS "$GATEWAY/teacher/tasks" -H "Authorization: Bearer $TEACHER_TOKEN"
 echo
 
 echo
@@ -66,26 +66,26 @@ curl -sS "$GATEWAY/student/tasks" -H "Authorization: Bearer $STUDENT_TOKEN"
 echo
 
 echo
-echo "5) Student creates submission in MongoDB through /student"
-curl -sS -X POST "$GATEWAY/student" \
+echo "5) Student creates submission in MongoDB through /student/submissions"
+curl -sS -X POST "$GATEWAY/student/submissions" \
   -H "Authorization: Bearer $STUDENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"taskId\":\"$TASK_ID\",\"answer\":\"Local Kubernetes deployment is working with MongoDB and JWT authorization.\"}"
 echo
 
 echo
-echo "6) Student reads own MongoDB submissions through /student"
-curl -sS "$GATEWAY/student" -H "Authorization: Bearer $STUDENT_TOKEN"
+echo "6) Student reads own MongoDB submissions through /student/submissions"
+curl -sS "$GATEWAY/student/submissions" -H "Authorization: Bearer $STUDENT_TOKEN"
 echo
 
-TEACHER_TO_STUDENT_CODE="$(status_request "$TMP_DIR/teacher-to-student.json" "$GATEWAY/student" -H "Authorization: Bearer $TEACHER_TOKEN")"
-STUDENT_TO_TEACHER_CODE="$(status_request "$TMP_DIR/student-to-teacher.json" "$GATEWAY/teacher" -H "Authorization: Bearer $STUDENT_TOKEN")"
+TEACHER_TO_STUDENT_CODE="$(status_request "$TMP_DIR/teacher-to-student.json" "$GATEWAY/student/submissions" -H "Authorization: Bearer $TEACHER_TOKEN")"
+STUDENT_TO_TEACHER_CODE="$(status_request "$TMP_DIR/student-to-teacher.json" "$GATEWAY/teacher/tasks" -H "Authorization: Bearer $STUDENT_TOKEN")"
 
 echo
-echo "7) Teacher JWT to /student returns $TEACHER_TO_STUDENT_CODE"
+echo "7) Teacher JWT to /student/submissions returns $TEACHER_TO_STUDENT_CODE"
 cat "$TMP_DIR/teacher-to-student.json"
 echo
-echo "8) Student JWT to /teacher returns $STUDENT_TO_TEACHER_CODE"
+echo "8) Student JWT to /teacher/tasks returns $STUDENT_TO_TEACHER_CODE"
 cat "$TMP_DIR/student-to-teacher.json"
 echo
 

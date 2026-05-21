@@ -3,12 +3,10 @@ package com.aupp.student.controller;
 import java.util.List;
 import java.util.Map;
 
-import com.aupp.student.client.TeacherTaskClient;
 import com.aupp.student.dto.SubmissionRequest;
 import com.aupp.student.dto.SubmissionResponse;
 import com.aupp.student.dto.TeacherTaskView;
-import com.aupp.student.model.Submission;
-import com.aupp.student.repository.SubmissionRepository;
+import com.aupp.student.service.StudentTaskService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,18 +16,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/student")
 public class StudentTaskController {
 
-    private final SubmissionRepository submissionRepository;
-    private final TeacherTaskClient teacherTaskClient;
+    private final StudentTaskService studentTaskService;
 
-    public StudentTaskController(SubmissionRepository submissionRepository, TeacherTaskClient teacherTaskClient) {
-        this.submissionRepository = submissionRepository;
-        this.teacherTaskClient = teacherTaskClient;
+    public StudentTaskController(StudentTaskService studentTaskService) {
+        this.studentTaskService = studentTaskService;
     }
 
     @GetMapping("/me")
@@ -42,7 +37,7 @@ public class StudentTaskController {
 
     @GetMapping("/tasks")
     List<TeacherTaskView> listTasks() {
-        return teacherTaskClient.listTasks();
+        return studentTaskService.listTeacherTasks();
     }
 
     @PostMapping({"", "/submissions"})
@@ -50,23 +45,13 @@ public class StudentTaskController {
             @RequestHeader(value = "X-User-Email", defaultValue = "") String studentEmail,
             @Valid @RequestBody SubmissionRequest request
     ) {
-        if (studentEmail.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "missing gateway identity header");
-        }
-        Submission saved = submissionRepository.save(new Submission(studentEmail, request.taskId(), request.answer()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(SubmissionResponse.from(saved));
+        return ResponseEntity.status(HttpStatus.CREATED).body(studentTaskService.submit(studentEmail, request));
     }
 
     @GetMapping({"", "/submissions"})
     List<SubmissionResponse> listSubmissions(
             @RequestHeader(value = "X-User-Email", defaultValue = "") String studentEmail
     ) {
-        if (studentEmail.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "missing gateway identity header");
-        }
-        return submissionRepository.findByStudentEmailOrderBySubmittedAtDesc(studentEmail)
-                .stream()
-                .map(SubmissionResponse::from)
-                .toList();
+        return studentTaskService.listSubmissions(studentEmail);
     }
 }

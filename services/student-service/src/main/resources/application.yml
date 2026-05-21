@@ -11,6 +11,10 @@ spring:
 teacher:
   service-uri: ${TEACHER_SERVICE_URI:http://teacher-service:8083}
 
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-please-use-a-very-long-random-secret-key-1234567890}
+
 management:
   endpoints:
     web:

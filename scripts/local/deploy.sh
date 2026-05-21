@@ -19,6 +19,14 @@ done
 
 kubectl apply -k "$ROOT_DIR/deploy/k8s"
 
+# Force pods to pick up freshly rebuilt images: the :1.0.0 tag is fixed and
+# imagePullPolicy is IfNotPresent, so `kubectl apply` alone leaves old pods running.
+kubectl -n aupp rollout restart \
+  deployment/api-gateway \
+  deployment/login-service \
+  deployment/student-service \
+  deployment/teacher-service
+
 kubectl -n aupp rollout status statefulset/mongodb --timeout=240s
 kubectl -n aupp rollout status deployment/login-service --timeout=240s
 kubectl -n aupp rollout status deployment/teacher-service --timeout=240s
@@ -30,4 +38,4 @@ kubectl -n aupp get deploy,sts,svc,pvc -o wide
 echo
 kubectl -n aupp get pods -o wide
 echo
-echo "Gateway: http://localhost:30080"
+echo "Gateway (NodePort, all endpoints): http://localhost:30080"

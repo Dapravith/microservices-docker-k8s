@@ -8,7 +8,7 @@
   "variable": [
     {
       "key": "gateway",
-      "value": "http://localhost:8080"
+      "value": "http://localhost:30080"
     },
     {
       "key": "studentJwt",
@@ -163,7 +163,7 @@
           "mode": "raw",
           "raw": "{\"title\":\"Kubernetes Local Deployment\",\"description\":\"Deploy all Spring Boot microservices into local Kubernetes and capture screenshots.\",\"course\":\"Cloud Computing\",\"dueDate\":\"{{dueDate}}\",\"maxScore\":100}"
         },
-        "url": "{{gateway}}/teacher"
+        "url": "{{gateway}}/teacher/tasks"
       }
     },
     {
@@ -176,7 +176,7 @@
             "value": "Bearer {{teacherJwt}}"
           }
         ],
-        "url": "{{gateway}}/teacher"
+        "url": "{{gateway}}/teacher/tasks"
       }
     },
     {
@@ -210,7 +210,7 @@
           "mode": "raw",
           "raw": "{\"taskId\":\"{{taskId}}\",\"answer\":\"Local Kubernetes deployment is working with MongoDB and JWT authorization.\"}"
         },
-        "url": "{{gateway}}/student"
+        "url": "{{gateway}}/student/submissions"
       }
     },
     {
@@ -223,7 +223,7 @@
             "value": "Bearer {{studentJwt}}"
           }
         ],
-        "url": "{{gateway}}/student"
+        "url": "{{gateway}}/student/submissions"
       }
     },
     {
@@ -247,7 +247,7 @@
             "value": "Bearer {{teacherJwt}}"
           }
         ],
-        "url": "{{gateway}}/student"
+        "url": "{{gateway}}/student/submissions"
       }
     },
     {
@@ -271,7 +271,7 @@
             "value": "Bearer {{studentJwt}}"
           }
         ],
-        "url": "{{gateway}}/teacher"
+        "url": "{{gateway}}/teacher/tasks"
       }
     }
   ]

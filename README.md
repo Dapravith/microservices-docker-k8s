@@ -12,7 +12,7 @@ The project runs in local Kubernetes first, then uses the same manifests on 3 EC
 Laptop / Postman
       |
       v
-api-gateway pod :30080
+api-gateway pod :8080
       |
       +--> login-service pod      role=admin
       +--> teacher-service pod    role=teacher
@@ -99,8 +99,9 @@ cd services/student-service && ./mvnw -DskipTests install
 cd services/student-service && ./mvnw spring-boot:run
 ```
 
-Service ports: `api-gateway` 8080, `login-service` 8081, `student-service` 8082,
-`teacher-service` 8083. Health check: `GET /actuator/health`.
+Local API testing uses one public entry point: the `api-gateway` NodePort on
+`http://localhost:30080`. The downstream service ports are internal to the
+cluster and should not be used from Postman.
 
 Container/Kubernetes deploys go through `./scripts/local/deploy.sh`; each
 service's Dockerfile builds with `./mvnw` so the same pinned Maven version is
@@ -132,6 +133,10 @@ Optional Docker Hub push after `docker login`:
 
 Gateway URL:
 
+The `api-gateway` is exposed as a Kubernetes NodePort, and the `kind` cluster
+maps it to the host. No port-forward is needed — every API endpoint is reachable
+at:
+
 ```text
 http://localhost:30080
 ```
@@ -142,6 +147,9 @@ Import the Postman collection:
 postman/microservices-k8s.postman_collection.json
 ```
 
+Use `http://localhost:30080` for all requests; the gateway routes to the
+downstream services inside Kubernetes.
+
 ## Screenshot Checklist
 
 1. 3 EC2 instances running.
@@ -149,9 +157,9 @@ postman/microservices-k8s.postman_collection.json
 3. Kubernetes services and deployments.
 4. Pods spread across the 3 EC2 nodes.
 5. Postman login returns JWT.
-6. `/student` with student JWT works and reads/writes MongoDB data.
-7. `/teacher` with teacher JWT works and reads/writes MongoDB data.
-8. `/student` with teacher JWT returns `403`.
-9. `/teacher` with student JWT returns `403`.
+6. `/student/submissions` with student JWT works and reads/writes MongoDB data.
+7. `/teacher/tasks` with teacher JWT works and reads/writes MongoDB data.
+8. `/student/submissions` with teacher JWT returns `403`.
+9. `/teacher/tasks` with student JWT returns `403`.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the full EC2 runbook.

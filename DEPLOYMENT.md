@@ -12,7 +12,7 @@ Run everything from the repo root:
 
 ```bash
 ./scripts/local/deploy.sh
-./scripts/local/test-postman-flow.sh
+./scripts/test-postman-flow.sh
 ```
 
 The local kind cluster has 3 nodes:
@@ -159,6 +159,12 @@ http://<ec2-1-public-ip>:30080
 ```
 
 ## 6. Postman Test
+
+Quick CLI check (same script used for local — just point it at the EC2 gateway):
+
+```bash
+GATEWAY=http://<ec2-1-public-ip>:30080 ./scripts/test-postman-flow.sh
+```
 
 Import:
 

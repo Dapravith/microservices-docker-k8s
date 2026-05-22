@@ -113,7 +113,7 @@ Requirements: Docker, `kind`, `kubectl`, Java 21+ (Maven is bundled via `./mvnw`
 
 ```bash
 ./scripts/local/deploy.sh
-./scripts/local/test-postman-flow.sh
+./scripts/test-postman-flow.sh
 ```
 
 Docker image names default to your Docker Hub namespace:

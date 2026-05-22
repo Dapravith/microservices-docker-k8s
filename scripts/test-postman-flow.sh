@@ -51,7 +51,7 @@ echo "2) Teacher creates task in MongoDB through /teacher/tasks"
 TASK_JSON="$(curl -sS -X POST "$GATEWAY/teacher/tasks" \
   -H "Authorization: Bearer $TEACHER_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"title\":\"Kubernetes Local Deployment\",\"description\":\"Deploy all microservices into local Kubernetes and capture screenshots.\",\"course\":\"Cloud Computing\",\"dueDate\":\"$DUE_DATE\",\"maxScore\":100}")"
+  -d "{\"title\":\"Kubernetes Deployment\",\"description\":\"Deploy all microservices into Kubernetes and capture screenshots.\",\"course\":\"Cloud Computing\",\"dueDate\":\"$DUE_DATE\",\"maxScore\":100}")"
 printf '%s\n' "$TASK_JSON"
 TASK_ID="$(printf '%s' "$TASK_JSON" | json_value id)"
 
@@ -70,7 +70,7 @@ echo "5) Student creates submission in MongoDB through /student/submissions"
 curl -sS -X POST "$GATEWAY/student/submissions" \
   -H "Authorization: Bearer $STUDENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"taskId\":\"$TASK_ID\",\"answer\":\"Local Kubernetes deployment is working with MongoDB and JWT authorization.\"}"
+  -d "{\"taskId\":\"$TASK_ID\",\"answer\":\"Kubernetes deployment is working with MongoDB and JWT authorization.\"}"
 echo
 
 echo
@@ -120,4 +120,4 @@ if [[ "$TEACHER_TO_STUDENT_ROOT_CODE" != "403" \
 fi
 
 echo
-echo "Local Postman-equivalent flow passed."
+echo "Postman-equivalent flow passed."

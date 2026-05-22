@@ -8,12 +8,31 @@ This runbook keeps the workflow local-first:
 
 ## 1. Local Kubernetes
 
-Run everything from the repo root:
+Requirements: Docker, `kind`, `kubectl`, Java 21+ (Maven is bundled via `./mvnw`).
+
+Run everything from the repo root — two scripts, in order:
+
+**Step 1 — deploy.** One script does the whole pipeline:
 
 ```bash
 ./scripts/local/deploy.sh
+```
+
+It runs, in order:
+1. `create-kind-cluster.sh` — creates the 3-node kind cluster and labels nodes `admin` / `student` / `teacher`.
+2. `build-images.sh` — builds all 4 service images.
+3. `kind load` — loads the images into the cluster.
+4. `kubectl apply -k deploy/k8s` + `rollout restart` — applies manifests and forces pods onto the freshly built images.
+
+You do **not** run `create-kind-cluster.sh` or `build-images.sh` yourself — `deploy.sh` calls them.
+
+**Step 2 — verify:**
+
+```bash
 ./scripts/test-postman-flow.sh
 ```
+
+Defaults to `http://localhost:30080`; no env var needed.
 
 The local kind cluster has 3 nodes:
 
@@ -42,6 +61,15 @@ Do not point Postman directly at `login-service`, `student-service`, or
 `teacher-service`; all API testing should go through the gateway URL above.
 
 ## 2. EC2 Kubernetes
+
+Unlike local, EC2 is staged across 3 machines, so the scripts run in this order:
+
+1. **Bootstrap** (Section 3) — `bootstrap-k3s-server.sh` on `ec2_1`, then `bootstrap-k3s-agent.sh` on `ec2_2` and `ec2_3`.
+2. **Build images** (Section 4) — `build-node-images.sh` on each node with its `NODE_ROLE`.
+3. **Deploy** (Section 5) — `deploy.sh` on `ec2_1` only.
+4. **Verify** (Section 6) — `test-postman-flow.sh` against the gateway.
+
+Order matters: agents must join before you build/deploy, and all images must exist before `deploy.sh` (pods use `imagePullPolicy: IfNotPresent` with no registry, so a missing image means `ImagePullBackOff`).
 
 Create 3 Ubuntu EC2 instances. Use one security group that allows:
 
@@ -139,11 +167,15 @@ MongoDB uses the public `mongo:7` image as an infrastructure pod on `ec2_1`.
 
 ## 5. Deploy On EC2
 
-Run from `ec2_1`:
+Run from `ec2_1` only:
 
 ```bash
 EC2_1_NODE=ec2-1 EC2_2_NODE=ec2-2 EC2_3_NODE=ec2-3 ./scripts/ec2/deploy.sh
 ```
+
+This labels the nodes (`label-nodes.sh` runs inside `deploy.sh` — no need to run
+it yourself), applies the manifests, and runs `rollout restart` so the pods pick
+up the images you just built in Section 4.
 
 Verify:
 

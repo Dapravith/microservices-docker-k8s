@@ -111,10 +111,16 @@ used everywhere.
 
 Requirements: Docker, `kind`, `kubectl`, Java 21+ (Maven is bundled via `./mvnw`).
 
+Two scripts, in order:
+
 ```bash
-./scripts/local/deploy.sh
-./scripts/test-postman-flow.sh
+./scripts/local/deploy.sh          # 1. create cluster + build images + deploy
+./scripts/test-postman-flow.sh     # 2. verify end-to-end
 ```
+
+`deploy.sh` calls `create-kind-cluster.sh` and `build-images.sh` for you — do
+not run those separately. For the full EC2 (3-instance) runbook, see
+[`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 Docker image names default to your Docker Hub namespace:
 
